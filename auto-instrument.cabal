@@ -1,0 +1,55 @@
+cabal-version:      3.0
+name:               auto-instrument
+version:            0.1.0.0
+synopsis:           Instrument an application
+-- description:
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Aaron Allen
+maintainer:         aaronallen8455@gmail.com
+-- copyright:
+category:           Development
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+common warnings
+    ghc-options: -Wall
+
+library
+    import:           warnings
+    exposed-modules:  AutoInstrument
+    other-modules:
+      AutoInstrument.Internal.Plugin
+      AutoInstrument.Internal.Plugin.TypeChecker
+      AutoInstrument.Internal.Plugin.Parser
+      AutoInstrument.Internal.Config
+      AutoInstrument.Internal.GhcFacade
+      AutoInstrument.Internal.Types
+      AutoInstrument.Internal.Otel
+    -- other-extensions:
+    build-depends:
+      base ^>=4.18.0.0,
+      ghc,
+      ghc-tcplugin-api,
+      aeson,
+      directory,
+      containers,
+      unliftio,
+      hs-opentelemetry-api,
+      syb,
+      text
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+test-suite auto-instrument-test
+    import:           warnings
+    default-language: Haskell2010
+    -- other-modules:
+    -- other-extensions:
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:
+        base ^>=4.18.0.0,
+        auto-instrument
