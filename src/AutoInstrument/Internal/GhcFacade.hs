@@ -10,3 +10,5 @@ import           GHC.Driver.Main as Ghc
 import           Language.Haskell.Syntax as Ghc
 import           GHC.Hs as Ghc (HsParsedModule(..))
 import           GHC.Hs.Extension as Ghc
+import           GHC.Parser.Annotation as Ghc (SrcSpanAnnA, noAnn, noSrcSpanA)
+import           GHC.Types.SourceText as Ghc

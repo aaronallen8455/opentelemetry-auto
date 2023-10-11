@@ -18,8 +18,8 @@ common warnings
 
 library
     import:           warnings
-    exposed-modules:  AutoInstrument
-    other-modules:
+    exposed-modules:
+      AutoInstrument
       AutoInstrument.Internal.Plugin
       AutoInstrument.Internal.Plugin.TypeChecker
       AutoInstrument.Internal.Plugin.Parser
@@ -27,6 +27,7 @@ library
       AutoInstrument.Internal.GhcFacade
       AutoInstrument.Internal.Types
       AutoInstrument.Internal.Otel
+    -- other-modules:
     -- other-extensions:
     build-depends:
       base ^>=4.18.0.0,
@@ -53,3 +54,15 @@ test-suite auto-instrument-test
     build-depends:
         base ^>=4.18.0.0,
         auto-instrument
+
+executable play
+  hs-source-dirs: play
+  default-language: Haskell2010
+  main-is: Main.hs
+  build-depends:
+    base ^>=4.18.0.0,
+    auto-instrument,
+    hs-opentelemetry-sdk,
+    unliftio,
+    transformers
+  ghc-options: -fplugin AutoInstrument

@@ -14,7 +14,7 @@ defaultConfigFile = "auto_instrument_config.json"
 plugin :: Ghc.Plugin
 plugin = Ghc.defaultPlugin
   { Ghc.pluginRecompile = pluginRecompile
-  , Ghc.tcPlugin = TypeChecker.tcPlugin
+--  , Ghc.tcPlugin = TypeChecker.tcPlugin
   , Ghc.parsedResultAction = Parser.parsedResultAction
   }
 
