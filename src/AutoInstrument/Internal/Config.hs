@@ -1,31 +1,20 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE OverloadedStrings #-}
 module AutoInstrument.Internal.Config
   ( Config(..)
-  , UserConfig
-  , PluginConfig
-  , Instrumentation(..)
-  , Instrumentor(..)
-  , ConstraintSet
+  , Target(..)
+  , readConfigFile
+  , getConfigFilePath
+  , defaultConfigFile
   ) where
 
 import           Data.Aeson
 import           Data.Set (Set)
+import qualified System.Directory as Dir
 
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
 
-type UserConfig = Config Instrumentor
-type PluginConfig = Config Ghc.Name
-
-newtype Config instrumentor = MkConfig
-  { instrumentations :: [Instrumentation instrumentor]
-  } deriving (Functor, Foldable, Traversable)
-
-data Instrumentation instrumentor = MkInstrumentation
-  { instrumentor :: instrumentor
-  , target :: Maybe Target
-  } deriving (Functor, Foldable, Traversable)
+newtype Config = MkConfig { targets :: [Target] }
 
 data Target
   = Constructor String
@@ -33,21 +22,9 @@ data Target
 
 type ConstraintSet = Set String
 
-data Instrumentor = MkInstrumentor
-  { functionName :: String
-  , moduleName :: String
-  , packageName :: String
-  }
-
-instance FromJSON (Config Instrumentor) where
+instance FromJSON Config where
   parseJSON = withObject "Config" $ \obj ->
-    MkConfig <$> obj .: "instrumentations"
-
-instance FromJSON (Instrumentation Instrumentor) where
-  parseJSON = withObject "Instrumentation" $ \obj ->
-    MkInstrumentation
-    <$> obj .: "instrumentor"
-    <*> obj .:? "target"
+    MkConfig <$> obj .: "targets"
 
 instance FromJSON Target where
   parseJSON = withObject "Target" $ \obj -> do
@@ -57,9 +34,21 @@ instance FromJSON Target where
       "constraints" -> Constraints <$> obj .: "value"
       _ -> fail $ "Unrecognized targed type: " <> tag
 
-instance FromJSON Instrumentor where
-  parseJSON = withObject "Instrumentor" $ \obj ->
-    MkInstrumentor
-    <$> obj .: "function"
-    <*> obj .: "module"
-    <*> obj .: "package"
+readConfigFile :: [Ghc.CommandLineOption] -> IO (Maybe Config)
+readConfigFile opts = do
+  let config = getConfigFilePath opts
+  exists <- Dir.doesFileExist config
+  if exists
+     then decodeFileStrict config
+     else do
+       putStrLn "================================================================="
+       putStrLn "Auto instrument config not found! The plugin will have no effect."
+       putStrLn "================================================================="
+       pure Nothing
+
+getConfigFilePath :: [Ghc.CommandLineOption] -> FilePath
+getConfigFilePath (opt : _) = opt
+getConfigFilePath [] = defaultConfigFile
+
+defaultConfigFile :: FilePath
+defaultConfigFile = "auto_instrument_config.json"

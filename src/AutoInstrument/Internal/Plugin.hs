@@ -4,17 +4,13 @@ module AutoInstrument.Internal.Plugin
 
 import qualified System.Directory as Dir
 
+import           AutoInstrument.Internal.Config (defaultConfigFile)
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
 import qualified AutoInstrument.Internal.Plugin.Parser as Parser
-import qualified AutoInstrument.Internal.Plugin.TypeChecker as TypeChecker
-
-defaultConfigFile :: FilePath
-defaultConfigFile = "auto_instrument_config.json"
 
 plugin :: Ghc.Plugin
 plugin = Ghc.defaultPlugin
   { Ghc.pluginRecompile = pluginRecompile
---  , Ghc.tcPlugin = TypeChecker.tcPlugin
   , Ghc.parsedResultAction = Parser.parsedResultAction
   }
 

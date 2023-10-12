@@ -9,13 +9,14 @@ import qualified Data.Set as S
 import           Control.Monad.IO.Class (liftIO)
 
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
+import qualified AutoInstrument.Internal.Config as Config
 
 parsedResultAction
   :: [Ghc.CommandLineOption]
   -> Ghc.ModSummary
   -> Ghc.ParsedResult
   -> Ghc.Hsc Ghc.ParsedResult
-parsedResultAction _opts _modSummary
+parsedResultAction opts _modSummary
     parsedResult@Ghc.ParsedResult
       {Ghc.parsedResultModule = prm@Ghc.HsParsedModule
         {Ghc.hpm_module = Ghc.L modLoc mo@Ghc.HsModule{Ghc.hsmodDecls}}} = do
@@ -25,30 +26,39 @@ parsedResultAction _opts _modSummary
   otelMod <-
     case result of
       Ghc.Found _ m -> pure m
-      _ -> error "oh no"
+      _ -> error "AutoInstrument.Internal.Types module not found"
   let occ = Ghc.mkVarOcc "autoInstrument"
   autoInstrumentName <- liftIO $ Ghc.lookupNameCache (Ghc.hsc_NC hscEnv) otelMod occ
 
-  let targets = S.fromList
-              $ getTargets (Ghc.mkOccName Ghc.dataName "Test") hsmodDecls
+  mConfig <- liftIO $ Config.readConfigFile opts
 
-      newDecls = instrumentDecl autoInstrumentName targets <$> hsmodDecls
+  case mConfig of
+    Nothing -> pure parsedResult
+    Just config -> do
+      let targets = do
+            -- TODO use constraint sets
+            Config.Constructor target <- Config.targets config
+            pure $ Ghc.mkFastString target
+          matches = S.fromList
+                  $ getMatches targets hsmodDecls
 
-  -- Since using a parser, name shadowing is potentially a problem. could make
-  -- a traversal that checks for all type sigs that are direct children of the
-  -- current node, then find the definitions corresponding to those sigs.
-  -- Perhaps the plugin should only consider type level definitions.
+          newDecls = instrumentDecl autoInstrumentName matches <$> hsmodDecls
 
-  pure parsedResult
-    { Ghc.parsedResultModule = prm
-      { Ghc.hpm_module = Ghc.L modLoc mo
-        { Ghc.hsmodDecls = newDecls
+      -- Since using a parser, name shadowing is potentially a problem. could make
+      -- a traversal that checks for all type sigs that are direct children of the
+      -- current node, then find the definitions corresponding to those sigs.
+      -- Perhaps the plugin should only consider type level definitions.
+
+      pure parsedResult
+        { Ghc.parsedResultModule = prm
+          { Ghc.hpm_module = Ghc.L modLoc mo
+            { Ghc.hsmodDecls = newDecls
+            }
+          }
         }
-      }
-    }
 
-getTargets :: Ghc.OccName -> [Ghc.LHsDecl Ghc.GhcPs] -> [Ghc.OccName]
-getTargets target = concat . mapMaybe go where
+getMatches :: [Ghc.FastString] -> [Ghc.LHsDecl Ghc.GhcPs] -> [Ghc.OccName]
+getMatches targets = concat . mapMaybe go where
   go (Ghc.L _ (Ghc.SigD _ (Ghc.TypeSig _ lhs (Ghc.HsWC _ (Ghc.L _ (Ghc.HsSig _ _ (Ghc.L _ ty)))))))
     | isTargetTy ty = Just (Ghc.rdrNameOcc . Ghc.unLoc <$> lhs)
   go _ = Nothing
@@ -59,7 +69,7 @@ getTargets target = concat . mapMaybe go where
     -- are applied to it rather than some argument.
     -- Ghc.HsTyVar _ _ (Ghc.L _ _) -> True
     Ghc.HsAppTy _ (Ghc.L _ (Ghc.HsTyVar _ _ (Ghc.L _ constr))) (Ghc.L _ _inner) -- TODO look at rest of ty
-      -> Ghc.occNameFS (Ghc.rdrNameOcc constr) == Ghc.occNameFS target
+      -> elem (Ghc.occNameFS (Ghc.rdrNameOcc constr)) targets
     -- Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ inner) -> True
     Ghc.HsFunTy _ _ _ (Ghc.L _ nxt) -> isTargetTy nxt
     Ghc.HsParTy _ (Ghc.L _ nxt) -> isTargetTy nxt

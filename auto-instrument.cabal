@@ -21,7 +21,6 @@ library
     exposed-modules:
       AutoInstrument
       AutoInstrument.Internal.Plugin
-      AutoInstrument.Internal.Plugin.TypeChecker
       AutoInstrument.Internal.Plugin.Parser
       AutoInstrument.Internal.Config
       AutoInstrument.Internal.GhcFacade
