@@ -1,5 +1,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 module AutoInstrument.Internal.Plugin.Parser
   ( parsedResultAction
   ) where
@@ -78,10 +79,10 @@ getMatches targets = concat . mapMaybe go where
 
 instrumentDecl :: Ghc.Name -> S.Set Ghc.OccName -> Ghc.LHsDecl Ghc.GhcPs -> Ghc.LHsDecl Ghc.GhcPs
 instrumentDecl instrName targets
-    (Ghc.L loc (Ghc.ValD vX (Ghc.FunBind fX funId (Ghc.MG mX (Ghc.L altsLoc alts)))))
-  | Ghc.rdrNameOcc (Ghc.unLoc funId) `S.member` targets
-  = let newAlts = (fmap . fmap) (instrumentMatch (Ghc.unLoc funId) instrName) alts
-     in Ghc.L loc (Ghc.ValD vX (Ghc.FunBind fX funId (Ghc.MG mX (Ghc.L altsLoc newAlts))))
+    (Ghc.L loc (Ghc.ValD vX (Ghc.FunBind { Ghc.fun_matches = Ghc.MG { Ghc.mg_alts = Ghc.L altsLoc alts, ..}, ..} )))
+  | Ghc.rdrNameOcc (Ghc.unLoc fun_id) `S.member` targets
+  = let newAlts = (fmap . fmap) (instrumentMatch (Ghc.unLoc fun_id) instrName) alts
+     in Ghc.L loc (Ghc.ValD vX (Ghc.FunBind {Ghc.fun_matches = Ghc.MG { Ghc.mg_alts = Ghc.L altsLoc newAlts, ..}, ..}))
 instrumentDecl _ _ x = x
 
 instrumentMatch
