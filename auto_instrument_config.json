@@ -1,0 +1,6 @@
+{ "targets": [
+  { "type": "constructor"
+  , "value": "Test"
+  }
+]
+}

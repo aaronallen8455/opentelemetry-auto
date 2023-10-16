@@ -13,10 +13,14 @@ main = bracket
   (\tracerProvider -> do
     let tracer = Otel.makeTracer tracerProvider "main" Otel.tracerOptions
     runReaderT (unTest blah) tracer
+    runReaderT (unTest $ foo 1) tracer
   )
 
 blah :: Test ()
 blah = Test $ pure ()
+
+foo :: Int -> Main.Test ()
+foo = const $ pure ()
 
 newtype Test a = Test { unTest :: ReaderT Otel.Tracer IO a }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO)
