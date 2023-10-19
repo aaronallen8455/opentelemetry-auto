@@ -9,6 +9,7 @@ module AutoInstrument.Internal.Config
   , readConfigFile
   , getConfigFilePath
   , defaultConfigFile
+  , TargetAtom(..)
   ) where
 
 import           Control.Applicative ((<|>))
@@ -24,11 +25,14 @@ import qualified AutoInstrument.Internal.GhcFacade as Ghc
 newtype Config = MkConfig { targets :: [Target] }
 
 data Target
-  = Constructor String [ConArg]
+  = Constructor Target'
   | Constraints ConstraintSet [PredArg]
 
 type Target' = [TargetAtom]
 
+-- This formulation facilitates partially applied constructors but it may be
+-- better to use a tree structure that matches the haskell AST. How useful
+-- would partial application be for users? Probably low value.
 data TargetAtom
   = Exact String
   | Paren Target'
@@ -80,7 +84,11 @@ instance FromJSON Target where
   parseJSON = withObject "Target" $ \obj -> do
     tag <- obj .: "type"
     case tag of
-      "constructor" -> Constructor <$> obj .: "value" <*> obj .:? "args" .!= []
+      "constructor" -> do
+        value <- obj .: "value"
+        case P.readP_to_S targetParser value of
+          [(targets, "")] -> pure $ Constructor targets
+          _ -> fail "failed to parse target"
       "constraints" -> Constraints <$> obj .: "value" <*> obj .:? "args" .!= []
       _ -> fail $ "Unrecognized targed type: " <> tag
 
