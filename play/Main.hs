@@ -16,14 +16,14 @@ main = bracket
     runReaderT (unTest $ foo 1) tracer
   )
 
-blah :: Test ()
+blah :: Test Bool ()
 blah = Test $ pure ()
 
-foo :: Int -> Main.Test ()
+foo :: Int -> Main.Test Bool ()
 foo = const $ pure ()
 
-newtype Test a = Test { unTest :: ReaderT Otel.Tracer IO a }
+newtype Test b a = Test { unTest :: ReaderT Otel.Tracer IO a }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO)
 
-instance Otel.MonadTracer Test where
-  getTracer = Test ask
+-- instance Otel.MonadTracer (Test Bool) where
+--   getTracer = Test ask

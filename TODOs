@@ -13,3 +13,14 @@ than 1 argument? How would that work?
 - constraints can be handled the same
 What about constraints that take some portion of the constructor application?
 Should be allowed and doesn't seem like it'd require any special handling.
+- probably shouldn't assume that the last argument of the constraint is the
+  result constructor. Could require an argument be specified using '*' to indicate
+  the position of the result constructor. Not great since * already has a meaning
+  in haskell. Could use # instead?
+Type operator applications probably shouldn't be supported
+What about arguments in parens?
+Would be a good idea to run the input through the parser for types?
+In practice it's unusual to have arguments to constructors or constraints that
+consist of nested parens, can probably get away with not having support for that.
+
+write docs

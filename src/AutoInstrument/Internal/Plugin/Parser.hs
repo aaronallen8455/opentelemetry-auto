@@ -5,9 +5,11 @@ module AutoInstrument.Internal.Plugin.Parser
   ( parsedResultAction
   ) where
 
+import           Control.Monad
+import           Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Char8 as BS8
 import           Data.Maybe (mapMaybe)
 import qualified Data.Set as S
-import           Control.Monad.IO.Class (liftIO)
 
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
 import qualified AutoInstrument.Internal.Config as Config
@@ -38,8 +40,8 @@ parsedResultAction opts _modSummary
     Just config -> do
       let targets = do
             -- TODO use constraint sets
-            Config.Constructor target <- Config.targets config
-            pure $ Ghc.mkFastString target
+            Config.Constructor target args <- Config.targets config
+            pure (BS8.pack target, args)
           matches = S.fromList
                   $ getMatches targets hsmodDecls
 
@@ -58,7 +60,7 @@ parsedResultAction opts _modSummary
           }
         }
 
-getMatches :: [Ghc.FastString] -> [Ghc.LHsDecl Ghc.GhcPs] -> [Ghc.OccName]
+getMatches :: [(BS8.ByteString, [Config.ConArg])] -> [Ghc.LHsDecl Ghc.GhcPs] -> [Ghc.OccName]
 getMatches targets = concat . mapMaybe go where
   go (Ghc.L _ (Ghc.SigD _ (Ghc.TypeSig _ lhs (Ghc.HsWC _ (Ghc.L _ (Ghc.HsSig _ _ (Ghc.L _ ty)))))))
     | isTargetTy ty = Just (Ghc.rdrNameOcc . Ghc.unLoc <$> lhs)
@@ -68,14 +70,36 @@ getMatches targets = concat . mapMaybe go where
     Ghc.HsQualTy _ _ctx (Ghc.L _ body) -> isTargetTy body -- TODO use constraint context
     -- constraints will have to be carried to the return type to check that they
     -- are applied to it rather than some argument.
-    -- Ghc.HsTyVar _ _ (Ghc.L _ _) -> True
-    Ghc.HsAppTy _ (Ghc.L _ (Ghc.HsTyVar _ _ (Ghc.L _ constr))) (Ghc.L _ _inner) -- TODO look at rest of ty
-      -> elem (Ghc.occNameFS (Ghc.rdrNameOcc constr)) targets
-    -- Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ inner) -> True
+    Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ _inner)
+      -> let constrBS x = Ghc.bytesFS $ Ghc.occNameFS (Ghc.rdrNameOcc x)
+             f rdrName = lookup (constrBS rdrName) targets
+          in (null <$> checkCon f con) == Just True
     Ghc.HsFunTy _ _ _ (Ghc.L _ nxt) -> isTargetTy nxt
     Ghc.HsParTy _ (Ghc.L _ nxt) -> isTargetTy nxt
     Ghc.HsDocTy _ (Ghc.L _ nxt) _ -> isTargetTy nxt
     _ -> False
+  checkCon
+    :: (Ghc.RdrName -> Maybe [Config.ConArg])
+    -> Ghc.HsType Ghc.GhcPs
+    -> Maybe [Config.ConArg]
+  checkCon getArgs = \case
+    Ghc.HsTyVar _ _ (Ghc.L _ constr) -> getArgs constr
+    Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ arg) -> do
+      args <- checkCon getArgs con
+      case args of
+        [] -> Just []
+        Config.ConWildcard : rest -> Just rest
+        Config.ConArg conArg : rest -> do
+          let argWords = Config.ConArg <$> BS8.words conArg -- TODO allow wildcards here?
+              f rdrName = case argWords of
+                  Config.ConArg n : others -> do
+                    guard $ n == Ghc.bytesFS (Ghc.occNameFS $ Ghc.rdrNameOcc rdrName)
+                    Just others
+                  _ -> Nothing
+          [] <- checkCon f arg
+          Just rest
+    Ghc.HsParTy _ (Ghc.L _ nxt) -> checkCon getArgs nxt
+    _ -> Nothing
 
 instrumentDecl :: Ghc.Name -> S.Set Ghc.OccName -> Ghc.LHsDecl Ghc.GhcPs -> Ghc.LHsDecl Ghc.GhcPs
 instrumentDecl instrName targets
