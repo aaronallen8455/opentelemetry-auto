@@ -9,7 +9,7 @@ module AutoInstrument.Internal.Config
   , readConfigFile
   , getConfigFilePath
   , defaultConfigFile
-  , TargetAtom(..)
+  , TargetCon(..)
   ) where
 
 import           Control.Applicative ((<|>))
@@ -25,33 +25,30 @@ import qualified AutoInstrument.Internal.GhcFacade as Ghc
 newtype Config = MkConfig { targets :: [Target] }
 
 data Target
-  = Constructor Target'
+  = Constructor TargetCon
   | Constraints ConstraintSet [PredArg]
 
-type Target' = [TargetAtom]
-
--- This formulation facilitates partially applied constructors but it may be
--- better to use a tree structure that matches the haskell AST. How useful
--- would partial application be for users? Probably low value.
-data TargetAtom
-  = Exact String
-  | Paren Target'
-  | Wildcard
+-- TODO tuples
+data TargetCon
+  = TyVar String
+  | WC
+  | App TargetCon TargetCon
+  | Unit
   deriving Show
 
-targetParser :: P.ReadP Target'
-targetParser = P.skipSpaces *> P.many1 atomParser <* P.eof
-
-atomParser :: P.ReadP TargetAtom
-atomParser = parseExact <|> parseParen <|> parseWildcard
+targetParser :: P.ReadP TargetCon
+targetParser = appP
   where
-    parseWildcard = Wildcard <$ P.char '_' <* P.skipSpaces
-    parseExact = Exact <$>
-      P.munch1 (\c -> c `notElem` [' ', '(', ')', '_'])
-        <* P.skipSpaces
-    parseParen = Paren <$>
+    appP = P.chainl1 (unitP <|> varP <|> parenP) (pure App) <* P.skipSpaces
+    unitP = Unit <$ P.string "()" <* P.skipSpaces
+    varP = do
+      v <- P.munch1 (\c -> c `notElem` [' ', '(', ')']) <* P.skipSpaces
+      case v of
+        "_" -> pure WC
+        _ -> pure $ TyVar v
+    parenP =
       P.between (P.char '(' <* P.skipSpaces) (P.char ')')
-        (P.many1 atomParser)
+        targetParser
         <* P.skipSpaces
 
 type ConstraintSet = Set String
@@ -86,7 +83,7 @@ instance FromJSON Target where
     case tag of
       "constructor" -> do
         value <- obj .: "value"
-        case P.readP_to_S targetParser value of
+        case P.readP_to_S (P.skipSpaces *> targetParser <* P.eof) value of
           [(targets, "")] -> pure $ Constructor targets
           _ -> fail "failed to parse target"
       "constraints" -> Constraints <$> obj .: "value" <*> obj .:? "args" .!= []

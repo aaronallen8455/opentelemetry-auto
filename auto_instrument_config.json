@@ -1,7 +1,6 @@
 { "targets": [
   { "type": "constructor"
   , "value": "Test"
-  , "args": ["Bool"]
   }
 ]
 }

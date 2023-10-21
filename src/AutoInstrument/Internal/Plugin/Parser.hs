@@ -5,7 +5,6 @@ module AutoInstrument.Internal.Plugin.Parser
   ( parsedResultAction
   ) where
 
-import           Control.Monad
 import           Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString.Char8 as BS8
 import           Data.Maybe (mapMaybe)
@@ -36,12 +35,21 @@ parsedResultAction opts _modSummary
   mConfig <- liftIO $ Config.readConfigFile opts
 
   case mConfig of
-    Nothing -> pure parsedResult
+    Nothing -> liftIO $ do
+      putStrLn "================================================================================"
+      putStrLn "Failed to parse auto instrument config file"
+      putStrLn "================================================================================"
+      pure parsedResult
+      -- TODO emit a parse error
+--         { Ghc.parsedResultMessages = Ghc.parsedResultMessages parsedResult
+--           { Ghc.psErrors =
+--           }
+--         }
     Just config -> do
       let targets = do
             -- TODO use constraint sets
-            Config.Constructor (Config.Exact target : args) <- Config.targets config
-            pure (BS8.pack target, args)
+            Config.Constructor target <- Config.targets config
+            pure target
           matches = S.fromList
                   $ getMatches targets hsmodDecls
 
@@ -60,7 +68,7 @@ parsedResultAction opts _modSummary
           }
         }
 
-getMatches :: [(BS8.ByteString, [Config.TargetAtom])] -> [Ghc.LHsDecl Ghc.GhcPs] -> [Ghc.OccName]
+getMatches :: [Config.TargetCon] -> [Ghc.LHsDecl Ghc.GhcPs] -> [Ghc.OccName]
 getMatches targets = concat . mapMaybe go where
   go (Ghc.L _ (Ghc.SigD _ (Ghc.TypeSig _ lhs (Ghc.HsWC _ (Ghc.L _ (Ghc.HsSig _ _ (Ghc.L _ ty)))))))
     | isTargetTy ty = Just (Ghc.rdrNameOcc . Ghc.unLoc <$> lhs)
@@ -70,44 +78,28 @@ getMatches targets = concat . mapMaybe go where
     Ghc.HsQualTy _ _ctx (Ghc.L _ body) -> isTargetTy body -- TODO use constraint context
     -- constraints will have to be carried to the return type to check that they
     -- are applied to it rather than some argument.
-    Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ _inner)
-      -> let constrBS x = Ghc.bytesFS $ Ghc.occNameFS (Ghc.rdrNameOcc x)
-             f rdrName =
-                 lookup (constrBS rdrName) targets
-          in (null <$> checkCon True f con) == Just True
+    app@Ghc.HsAppTy{} -> any (\t -> checkTy True t app) targets
+    var@Ghc.HsTyVar{} -> any (\t -> checkTy True t var) targets
     Ghc.HsFunTy _ _ _ (Ghc.L _ nxt) -> isTargetTy nxt
     Ghc.HsParTy _ (Ghc.L _ nxt) -> isTargetTy nxt
     Ghc.HsDocTy _ (Ghc.L _ nxt) _ -> isTargetTy nxt
     _ -> False
-  checkCon
+  checkTy
     :: Bool
-    -> (Ghc.RdrName -> Maybe [Config.TargetAtom])
+    -> Config.TargetCon
     -> Ghc.HsType Ghc.GhcPs
-    -> Maybe [Config.TargetAtom]
-  checkCon isTopLevel getArgs = \case
-    Ghc.HsTyVar _ _ (Ghc.L _ constr) -> getArgs constr
-    Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ arg) -> do
-      args <- checkCon isTopLevel getArgs con
-      case args of
-        [] -> [] <$ guard isTopLevel
-        Config.Wildcard : rest -> Just rest
-        Config.Exact conArg : rest -> do
-          let f rdrName = do
-                  guard $ BS8.pack conArg == Ghc.bytesFS (Ghc.occNameFS $ Ghc.rdrNameOcc rdrName)
-                  Just []
-          [] <- checkCon False f arg
-          Just rest
-        Config.Paren innerArgs : rest -> do
-          let f rdrName = case innerArgs of
-                  -- TODO preprocess to remove use of parens at head of application
-                  Config.Exact n : others -> do
-                    guard $ BS8.pack n == Ghc.bytesFS (Ghc.occNameFS $ Ghc.rdrNameOcc rdrName)
-                    Just others
-                  _ -> Nothing
-          [] <- checkCon False f arg
-          Just rest
-    Ghc.HsParTy _ (Ghc.L _ nxt) -> checkCon False getArgs nxt
-    _ -> Nothing
+    -> Bool
+  checkTy top t (Ghc.HsParTy _ (Ghc.L _ x)) = checkTy top t x
+  checkTy _ (Config.TyVar name) (Ghc.HsTyVar _ _ (Ghc.L _ rdrName)) =
+    BS8.pack name == Ghc.bytesFS (Ghc.occNameFS $ Ghc.rdrNameOcc rdrName)
+  checkTy top target@(Config.App x y) (Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ arg)) =
+    (checkTy False y arg && checkTy False x con )
+    || (top && checkTy True target con)
+  checkTy True target@(Config.TyVar _) (Ghc.HsAppTy _ (Ghc.L _ con) _) =
+    checkTy True target con
+  checkTy _ Config.Unit (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple []) = True
+  checkTy _ Config.WC _ = True
+  checkTy _ _ _ = False
 
 instrumentDecl :: Ghc.Name -> S.Set Ghc.OccName -> Ghc.LHsDecl Ghc.GhcPs -> Ghc.LHsDecl Ghc.GhcPs
 instrumentDecl instrName targets
