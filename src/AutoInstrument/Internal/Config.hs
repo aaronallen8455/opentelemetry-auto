@@ -36,6 +36,7 @@ data TargetCon
   | WC
   | App TargetCon TargetCon
   | Unit
+  | Tuple [TargetCon]
   deriving (Show, Eq, Ord)
 
 targetParser :: P.ReadP TargetCon
@@ -44,14 +45,18 @@ targetParser = appP
     appP = P.chainl1 (unitP <|> varP <|> parenP) (pure App) <* P.skipSpaces
     unitP = Unit <$ P.string "()" <* P.skipSpaces
     varP = do
-      v <- P.munch1 (\c -> c `notElem` [' ', '(', ')']) <* P.skipSpaces
+      v <- P.munch1 (\c -> c `notElem` [' ', '(', ')', ',']) <* P.skipSpaces
       case v of
         "_" -> pure WC
         _ -> pure $ TyVar v
-    parenP =
-      P.between (P.char '(' <* P.skipSpaces) (P.char ')')
-        targetParser
-        <* P.skipSpaces
+    parenP = do
+      inParens <-
+        P.between (P.char '(' <* P.skipSpaces) (P.char ')')
+          (P.sepBy1 targetParser (P.char ',' <* P.skipSpaces))
+          <* P.skipSpaces
+      case inParens of
+        [t] -> pure t
+        _ -> pure $ Tuple inParens
 
 type ConstraintSet = Set TargetCon
 
@@ -114,4 +119,4 @@ getConfigFilePath (opt : _) = opt
 getConfigFilePath [] = defaultConfigFile
 
 defaultConfigFile :: FilePath
-defaultConfigFile = "auto_instrument_config.json"
+defaultConfigFile = "auto-instrument-config.json"

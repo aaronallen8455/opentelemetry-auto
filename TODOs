@@ -3,3 +3,5 @@ wrong call stack entry to be used. Might want to have `autoInstrument` take an
 explicit CallStack to be impervious to such version depedent issues.
 
 write docs
+
+write tests

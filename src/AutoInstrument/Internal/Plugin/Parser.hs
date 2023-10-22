@@ -108,6 +108,8 @@ getMatches conTargets predSets = concat . mapMaybe go where
   checkTy True target@(Config.TyVar _) (Ghc.HsAppTy _ (Ghc.L _ con) _) =
     checkTy True target con
   checkTy _ Config.Unit (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple []) = True
+  checkTy _ (Config.Tuple targets) (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple exprs) =
+    and $ zipWith (checkTy False) targets (Ghc.unLoc <$> exprs)
   checkTy _ Config.WC _ = True
   checkTy _ _ _ = False
 
