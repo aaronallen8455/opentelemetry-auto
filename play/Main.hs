@@ -13,13 +13,13 @@ main = bracket
   (\tracerProvider -> do
     let tracer = Otel.makeTracer tracerProvider "main" Otel.tracerOptions
     runReaderT (unTest blah) tracer
-    runReaderT (unTest $ foo 1) tracer
+    foo 1
   )
 
 blah :: Test Bool ()
 blah = Test $ pure ()
 
-foo :: Int -> Main.Test Bool ()
+foo :: (Ord a, Eq a, Read a) => a -> IO ()
 foo = const $ pure ()
 
 newtype Test b a = Test { unTest :: ReaderT Otel.Tracer IO a }

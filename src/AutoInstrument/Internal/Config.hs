@@ -10,12 +10,14 @@ module AutoInstrument.Internal.Config
   , getConfigFilePath
   , defaultConfigFile
   , TargetCon(..)
+  , ConstraintSet
   ) where
 
 import           Control.Applicative ((<|>))
 import           Data.Aeson
 import qualified Data.ByteString as BS
 import           Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Text.Encoding as T
 import qualified System.Directory as Dir
 import qualified Text.ParserCombinators.ReadP as P
@@ -26,7 +28,7 @@ newtype Config = MkConfig { targets :: [Target] }
 
 data Target
   = Constructor TargetCon
-  | Constraints ConstraintSet [PredArg]
+  | Constraints ConstraintSet
 
 -- TODO tuples
 data TargetCon
@@ -34,7 +36,7 @@ data TargetCon
   | WC
   | App TargetCon TargetCon
   | Unit
-  deriving Show
+  deriving (Show, Eq, Ord)
 
 targetParser :: P.ReadP TargetCon
 targetParser = appP
@@ -51,7 +53,7 @@ targetParser = appP
         targetParser
         <* P.skipSpaces
 
-type ConstraintSet = Set String
+type ConstraintSet = Set TargetCon
 
 data ConArg
   = ConWildcard
@@ -86,7 +88,13 @@ instance FromJSON Target where
         case P.readP_to_S (P.skipSpaces *> targetParser <* P.eof) value of
           [(targets, "")] -> pure $ Constructor targets
           _ -> fail "failed to parse target"
-      "constraints" -> Constraints <$> obj .: "value" <*> obj .:? "args" .!= []
+      "constraints" -> do
+        value <- obj .: "value"
+        let parsePred v =
+              case P.readP_to_S (P.skipSpaces *> targetParser <* P.eof) v of
+                [(target, "")] -> pure target
+                _ -> fail "failed to parse constraint target"
+        Constraints . S.fromList <$> traverse parsePred value
       _ -> fail $ "Unrecognized targed type: " <> tag
 
 readConfigFile :: [Ghc.CommandLineOption] -> IO (Maybe Config)

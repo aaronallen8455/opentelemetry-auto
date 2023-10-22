@@ -1,6 +1,9 @@
 { "targets": [
   { "type": "constructor"
   , "value": "Test"
+  },
+  { "type": "constraints"
+  , "value": ["Eq", "Read _"]
   }
 ]
 }

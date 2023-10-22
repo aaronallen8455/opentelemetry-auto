@@ -1,6 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RecordWildCards #-}
 module AutoInstrument.Internal.Plugin.Parser
   ( parsedResultAction
   ) where
@@ -46,12 +45,14 @@ parsedResultAction opts _modSummary
 --           }
 --         }
     Just config -> do
-      let targets = do
-            -- TODO use constraint sets
+      let conTargets = do
             Config.Constructor target <- Config.targets config
             pure target
+          predSets = do
+            Config.Constraints predSet <- Config.targets config
+            pure predSet
           matches = S.fromList
-                  $ getMatches targets hsmodDecls
+                  $ getMatches conTargets predSets hsmodDecls
 
           newDecls = instrumentDecl autoInstrumentName matches <$> hsmodDecls
 
@@ -68,28 +69,37 @@ parsedResultAction opts _modSummary
           }
         }
 
-getMatches :: [Config.TargetCon] -> [Ghc.LHsDecl Ghc.GhcPs] -> [Ghc.OccName]
-getMatches targets = concat . mapMaybe go where
+getMatches
+  :: [Config.TargetCon]
+  -> [Config.ConstraintSet]
+  -> [Ghc.LHsDecl Ghc.GhcPs]
+  -> [Ghc.OccName]
+getMatches conTargets predSets = concat . mapMaybe go where
   go (Ghc.L _ (Ghc.SigD _ (Ghc.TypeSig _ lhs (Ghc.HsWC _ (Ghc.L _ (Ghc.HsSig _ _ (Ghc.L _ ty)))))))
-    | isTargetTy ty = Just (Ghc.rdrNameOcc . Ghc.unLoc <$> lhs)
+    | isTargetTy [] ty = Just (Ghc.rdrNameOcc . Ghc.unLoc <$> lhs)
   go _ = Nothing
-  isTargetTy = \case
-    Ghc.HsForAllTy _ _ (Ghc.L _ body) -> isTargetTy body
-    Ghc.HsQualTy _ _ctx (Ghc.L _ body) -> isTargetTy body -- TODO use constraint context
-    -- constraints will have to be carried to the return type to check that they
-    -- are applied to it rather than some argument.
-    app@Ghc.HsAppTy{} -> any (\t -> checkTy True t app) targets
-    var@Ghc.HsTyVar{} -> any (\t -> checkTy True t var) targets
-    Ghc.HsFunTy _ _ _ (Ghc.L _ nxt) -> isTargetTy nxt
-    Ghc.HsParTy _ (Ghc.L _ nxt) -> isTargetTy nxt
-    Ghc.HsDocTy _ (Ghc.L _ nxt) _ -> isTargetTy nxt
+  isTargetTy quals = \case
+    Ghc.HsForAllTy _ _ (Ghc.L _ body) -> isTargetTy quals body
+    Ghc.HsQualTy _ (Ghc.L _ ctx) (Ghc.L _ body) ->
+      isTargetTy (quals ++ fmap Ghc.unLoc ctx) body
+    app@Ghc.HsAppTy{} ->
+      any (\t -> checkTy True t app) conTargets
+      || any (checkPred quals) predSets
+    var@Ghc.HsTyVar{} ->
+      any (\t -> checkTy True t var) conTargets
+      || any (checkPred quals) predSets
+    Ghc.HsFunTy _ _ _ (Ghc.L _ nxt) -> isTargetTy quals nxt
+    Ghc.HsParTy _ (Ghc.L _ nxt) -> isTargetTy quals nxt
+    Ghc.HsDocTy _ (Ghc.L _ nxt) _ -> isTargetTy quals nxt
     _ -> False
+
   checkTy
     :: Bool
     -> Config.TargetCon
     -> Ghc.HsType Ghc.GhcPs
     -> Bool
   checkTy top t (Ghc.HsParTy _ (Ghc.L _ x)) = checkTy top t x
+  checkTy top t (Ghc.HsDocTy _ (Ghc.L _ x) _) = checkTy top t x
   checkTy _ (Config.TyVar name) (Ghc.HsTyVar _ _ (Ghc.L _ rdrName)) =
     BS8.pack name == Ghc.bytesFS (Ghc.occNameFS $ Ghc.rdrNameOcc rdrName)
   checkTy top target@(Config.App x y) (Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ arg)) =
@@ -101,12 +111,24 @@ getMatches targets = concat . mapMaybe go where
   checkTy _ Config.WC _ = True
   checkTy _ _ _ = False
 
+  checkPred
+    :: [Ghc.HsType Ghc.GhcPs]
+    -> Config.ConstraintSet
+    -> Bool
+  checkPred quals predSet =
+    all (\p -> any (checkTy True p) quals)
+        (S.toList predSet)
+
 instrumentDecl :: Ghc.Name -> S.Set Ghc.OccName -> Ghc.LHsDecl Ghc.GhcPs -> Ghc.LHsDecl Ghc.GhcPs
 instrumentDecl instrName targets
-    (Ghc.L loc (Ghc.ValD vX (Ghc.FunBind { Ghc.fun_matches = Ghc.MG { Ghc.mg_alts = Ghc.L altsLoc alts, ..}, ..} )))
+    (Ghc.L loc (Ghc.ValD vX fb@Ghc.FunBind
+      { Ghc.fun_matches = mg@Ghc.MG
+        { Ghc.mg_alts = Ghc.L altsLoc alts }, Ghc.fun_id}))
   | Ghc.rdrNameOcc (Ghc.unLoc fun_id) `S.member` targets
   = let newAlts = (fmap . fmap) (instrumentMatch (Ghc.unLoc fun_id) instrName) alts
-     in Ghc.L loc (Ghc.ValD vX (Ghc.FunBind {Ghc.fun_matches = Ghc.MG { Ghc.mg_alts = Ghc.L altsLoc newAlts, ..}, ..}))
+     in Ghc.L loc (Ghc.ValD vX (fb
+       { Ghc.fun_matches = mg
+         { Ghc.mg_alts = Ghc.L altsLoc newAlts }}))
 instrumentDecl _ _ x = x
 
 instrumentMatch
@@ -117,8 +139,7 @@ instrumentMatch
 instrumentMatch bindName instrName match =
   match
     { Ghc.m_grhss = (Ghc.m_grhss match)
-      { Ghc.grhssGRHSs = (fmap . fmap) modifyGRH (Ghc.grhssGRHSs (Ghc.m_grhss match))
-      }
+      { Ghc.grhssGRHSs = (fmap . fmap) modifyGRH (Ghc.grhssGRHSs (Ghc.m_grhss match)) }
     }
   where
     modifyGRH :: Ghc.GRHS Ghc.GhcPs (Ghc.LHsExpr Ghc.GhcPs)

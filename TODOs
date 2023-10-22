@@ -1,26 +1,5 @@
-Implement constraint rules
-
 There a bug in version 0.1.0.0 of the open telemetry api package that causes the
 wrong call stack entry to be used. Might want to have `autoInstrument` take an
 explicit CallStack to be impervious to such version depedent issues.
-
-Should the user be able to specify constructors or constraints that take more
-than 1 argument? How would that work?
-- config includes an `arguments` field which is an array of strings.
-- can specify wildcard arguments with _
-- when matching a constructor, check that each application matches the
-  expected argument. fail to match if there are too many or too few arguments
-- constraints can be handled the same
-What about constraints that take some portion of the constructor application?
-Should be allowed and doesn't seem like it'd require any special handling.
-- probably shouldn't assume that the last argument of the constraint is the
-  result constructor. Could require an argument be specified using '*' to indicate
-  the position of the result constructor. Not great since * already has a meaning
-  in haskell. Could use # instead?
-Type operator applications probably shouldn't be supported
-What about arguments in parens?
-Would be a good idea to run the input through the parser for types?
-In practice it's unusual to have arguments to constructors or constraints that
-consist of nested parens, can probably get away with not having support for that.
 
 write docs
