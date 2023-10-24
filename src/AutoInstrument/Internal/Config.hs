@@ -1,11 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE LambdaCase #-}
 module AutoInstrument.Internal.Config
   ( Config(..)
   , Target(..)
-  , ConArg(..)
-  , PredArg(..)
   , readConfigFile
   , getConfigFilePath
   , defaultConfigFile
@@ -15,10 +12,8 @@ module AutoInstrument.Internal.Config
 
 import           Control.Applicative ((<|>))
 import           Data.Aeson
-import qualified Data.ByteString as BS
 import           Data.Set (Set)
 import qualified Data.Set as S
-import qualified Data.Text.Encoding as T
 import qualified System.Directory as Dir
 import qualified Text.ParserCombinators.ReadP as P
 
@@ -30,7 +25,6 @@ data Target
   = Constructor TargetCon
   | Constraints ConstraintSet
 
--- TODO tuples
 data TargetCon
   = TyVar String
   | WC
@@ -59,26 +53,6 @@ targetParser = appP
         _ -> pure $ Tuple inParens
 
 type ConstraintSet = Set TargetCon
-
-data ConArg
-  = ConWildcard
-  | ConArg BS.ByteString
-
-instance FromJSON ConArg where
-  parseJSON = withText "ConArg" $ \case
-    "_" -> pure ConWildcard
-    other -> pure . ConArg $ T.encodeUtf8 other
-
-data PredArg
-  = PredResult
-  | PredWildcard
-  | PredArg BS.ByteString
-
-instance FromJSON PredArg where
-  parseJSON = withText "PredArg" $ \case
-    "_" -> pure PredWildcard
-    "#" -> pure PredResult
-    other -> pure . PredArg $ T.encodeUtf8 other
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \obj ->

@@ -56,11 +56,6 @@ parsedResultAction opts _modSummary
 
           newDecls = instrumentDecl autoInstrumentName matches <$> hsmodDecls
 
-      -- Since using a parser, name shadowing is potentially a problem. could make
-      -- a traversal that checks for all type sigs that are direct children of the
-      -- current node, then find the definitions corresponding to those sigs.
-      -- Perhaps the plugin should only consider type level definitions.
-
       pure parsedResult
         { Ghc.parsedResultModule = prm
           { Ghc.hpm_module = Ghc.L modLoc mo

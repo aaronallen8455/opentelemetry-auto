@@ -32,7 +32,6 @@ library
       base >=4.17.0.0,
       bytestring,
       ghc,
-      ghc-tcplugin-api,
       aeson,
       directory,
       containers,
