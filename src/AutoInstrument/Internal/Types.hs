@@ -20,11 +20,11 @@ class AutoInstrument a where
     -> String -- package name
     -> a -> a
 
-instance {-# OVERLAPPING #-} AutoInstrument b => AutoInstrument (a -> b) where
+instance {-# INCOHERENT #-} AutoInstrument b => AutoInstrument (a -> b) where
   autoInstrument funName modName filePath lineNum pkgName f =
     autoInstrument funName modName filePath lineNum pkgName . f
 
-instance {-# OVERLAPPABLE #-} (Otel.MonadTracer m, MonadUnliftIO m)
+instance (Otel.MonadTracer m, MonadUnliftIO m)
     => AutoInstrument (m a) where
   autoInstrument funName modName filePath lineNum pkgName body =
     let attrs =
