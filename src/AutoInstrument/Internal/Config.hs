@@ -19,7 +19,18 @@ import qualified Text.ParserCombinators.ReadP as P
 
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
 
-newtype Config = MkConfig { targets :: [Target] }
+-- Implementing constraint targets in such a way that the target of the constraint
+-- is taken into account gets rather complicated. Currently constraints are matched
+-- using the same process as simple constructor matching however this can result
+-- in situations where the constraint matches but its subject type does not
+-- appear in the result type where it would need to. A workaround is to allow
+-- the user to define a list of exclusions so that those particular constructors
+-- can be ignored even if the constraint context matches.
+
+data Config = MkConfig
+  { targets :: [Target]
+  , exclusions :: [Target]
+  }
 
 data Target
   = Constructor TargetCon
@@ -56,7 +67,9 @@ type ConstraintSet = Set TargetCon
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \obj ->
-    MkConfig <$> obj .: "targets"
+    MkConfig
+      <$> obj .: "targets"
+      <*> obj .: "exclusions"
 
 instance FromJSON Target where
   parseJSON = withObject "Target" $ \obj -> do

@@ -8,5 +8,10 @@
   { "type": "constraints"
   , "value": ["MonadTracer", "MonadUnliftIO"]
   }
-]
+],
+  "exclusions": [
+    { "type": "constructor"
+    , "value": "IO"
+    }
+  ]
 }

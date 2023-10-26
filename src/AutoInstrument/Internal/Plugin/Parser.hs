@@ -49,14 +49,7 @@ parsedResultAction opts modSummary
 --           }
 --         }
     Just config -> do
-      let conTargets = do
-            Config.Constructor target <- Config.targets config
-            pure target
-          predSets = do
-            Config.Constraints predSet <- Config.targets config
-            pure predSet
-          matches = S.fromList
-                  $ getMatches conTargets predSets hsmodDecls
+      let matches = S.fromList $ getMatches config hsmodDecls
 
           newDecls = instrumentDecl modName unitId autoInstrumentName matches <$> hsmodDecls
 
@@ -69,11 +62,10 @@ parsedResultAction opts modSummary
         }
 
 getMatches
-  :: [Config.TargetCon]
-  -> [Config.ConstraintSet]
+  :: Config.Config
   -> [Ghc.LHsDecl Ghc.GhcPs]
   -> [Ghc.OccName]
-getMatches conTargets predSets = concat . mapMaybe go where
+getMatches cfg = concat . mapMaybe go where
   go (Ghc.L _ (Ghc.SigD _ (Ghc.TypeSig _ lhs (Ghc.HsWC _ (Ghc.L _ (Ghc.HsSig _ _ (Ghc.L _ ty)))))))
     | isTargetTy [] ty = Just (Ghc.rdrNameOcc . Ghc.unLoc <$> lhs)
   go _ = Nothing
@@ -81,16 +73,26 @@ getMatches conTargets predSets = concat . mapMaybe go where
     Ghc.HsForAllTy _ _ (Ghc.L _ body) -> isTargetTy quals body
     Ghc.HsQualTy _ (Ghc.L _ ctx) (Ghc.L _ body) ->
       isTargetTy (quals ++ fmap Ghc.unLoc ctx) body
-    app@Ghc.HsAppTy{} ->
-      any (\t -> checkTy True t app) conTargets
-      || any (checkPred quals) predSets
-    var@Ghc.HsTyVar{} ->
-      any (\t -> checkTy True t var) conTargets
-      || any (checkPred quals) predSets
+    app@Ghc.HsAppTy{} -> check quals app
+    var@Ghc.HsTyVar{} -> check quals var
     Ghc.HsFunTy _ _ _ (Ghc.L _ nxt) -> isTargetTy quals nxt
     Ghc.HsParTy _ (Ghc.L _ nxt) -> isTargetTy quals nxt
     Ghc.HsDocTy _ (Ghc.L _ nxt) _ -> isTargetTy quals nxt
     _ -> False
+
+  check
+    :: [Ghc.HsType Ghc.GhcPs]
+    -> Ghc.HsType Ghc.GhcPs
+    -> Bool
+  check quals expr =
+    any (matchTarget quals expr) (Config.targets cfg)
+    && not (any (matchTarget quals expr) (Config.exclusions cfg))
+
+  matchTarget _ expr (Config.Constructor conTarget) =
+    checkTy True conTarget expr
+
+  matchTarget quals _ (Config.Constraints predTarget) =
+    checkPred quals predTarget
 
   checkTy
     :: Bool
