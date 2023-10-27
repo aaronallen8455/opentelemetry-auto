@@ -1,15 +1,15 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 module AutoInstrument.Internal.Types
   ( AutoInstrument(..)
   ) where
 
 import           Data.Text
+import           UnliftIO
 
-import qualified OpenTelemetry.Trace.Core as Otel hiding (inSpan, inSpan'')
-import qualified OpenTelemetry.Trace.Monad as Otel
-import           UnliftIO (MonadUnliftIO)
+import qualified OpenTelemetry.Trace.Core as Otel
 
 class AutoInstrument a where
   autoInstrument
@@ -24,9 +24,14 @@ instance {-# INCOHERENT #-} AutoInstrument b => AutoInstrument (a -> b) where
   autoInstrument funName modName filePath lineNum pkgName f =
     autoInstrument funName modName filePath lineNum pkgName . f
 
-instance (Otel.MonadTracer m, MonadUnliftIO m)
+instance MonadUnliftIO m
     => AutoInstrument (m a) where
-  autoInstrument funName modName filePath lineNum pkgName body =
+  autoInstrument funName modName filePath lineNum pkgName body = do
+    tp <- Otel.getGlobalTracerProvider
+    -- TODO store this in a global var as an optimization? might not want to
+    -- since the global tracer provider can potentially change.
+    let tracer = Otel.makeTracer tp "hs-opentelemetry-instrumentation-auto" Otel.tracerOptions
+
     let attrs =
           [ (pack "code.function", Otel.toAttribute $ pack funName)
           , (pack "code.namespace", Otel.toAttribute $ pack modName)
@@ -36,8 +41,8 @@ instance (Otel.MonadTracer m, MonadUnliftIO m)
           ]
 #if MIN_VERSION_hs_opentelemetry_api(0,1,0)
         spanArgs = Otel.addAttributesToSpanArguments attrs Otel.defaultSpanArguments
-     in Otel.inSpan (pack funName) spanArgs body
+     in Otel.inSpan tracer (pack funName) spanArgs body
 #else
         spanArgs = Otel.defaultSpanArguments { Otel.attributes = attrs }
-     in Otel.inSpan'' [] (pack funName) spanArgs (const body)
+     in Otel.inSpan'' tracer [] (pack funName) spanArgs (const body)
 #endif

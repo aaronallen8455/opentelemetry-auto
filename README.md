@@ -18,7 +18,7 @@ This package is under development and not quite production ready.
   ]}
   ```
   Replace `MyAppMonad` with your application's primary monad. This monad needs
-  to have instances for `MonadTracer` and `MonadUnliftIO`, otherwise you'll get
+  to have an instance for `MonadUnliftIO`, otherwise you'll get
   type errors.
 - Pass the `-fplugin AutoInstrument` argument to GHC when compiling the project.
 - Only top-level functions that have type signatures with a return type that

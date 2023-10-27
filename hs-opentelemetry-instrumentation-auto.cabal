@@ -1,5 +1,5 @@
 cabal-version:      3.0
-name:               hs-opentelemetry-auto
+name:               hs-opentelemetry-instrumentation-auto
 version:            0.1.0.0
 synopsis:           Instrument an application
 -- description:
@@ -25,7 +25,6 @@ library
       AutoInstrument.Internal.Config
       AutoInstrument.Internal.GhcFacade
       AutoInstrument.Internal.Types
-      AutoInstrument.Internal.Otel
     -- other-modules:
     -- other-extensions:
     build-depends:
@@ -60,7 +59,7 @@ test-suite auto-instrument-test
 --   main-is: Main.hs
 --   build-depends:
 --     base >=4.17.0.0,
---     hs-opentelemetry-auto,
+--     hs-opentelemetry-instrumentation-auto,
 --     hs-opentelemetry-sdk,
 --     unliftio,
 --     transformers
