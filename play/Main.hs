@@ -25,6 +25,9 @@ foo = const $ pure ()
 boo :: (Otel.MonadTracer m, MonadUnliftIO m) => m ()
 boo = pure ()
 
+bah :: (Otel.MonadTracer m, MonadUnliftIO m) => Int -> m ()
+bah = const $ pure ()
+
 newtype Test b a = Test { unTest :: ReaderT Otel.Tracer IO a }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO)
 

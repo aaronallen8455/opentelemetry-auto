@@ -69,30 +69,28 @@ getMatches cfg = concat . mapMaybe go where
   go (Ghc.L _ (Ghc.SigD _ (Ghc.TypeSig _ lhs (Ghc.HsWC _ (Ghc.L _ (Ghc.HsSig _ _ (Ghc.L _ ty)))))))
     | isTargetTy [] ty = Just (Ghc.rdrNameOcc . Ghc.unLoc <$> lhs)
   go _ = Nothing
-  isTargetTy quals = \case
-    Ghc.HsForAllTy _ _ (Ghc.L _ body) -> isTargetTy quals body
+  isTargetTy preds = \case
+    Ghc.HsForAllTy _ _ (Ghc.L _ body) -> isTargetTy preds body
     Ghc.HsQualTy _ (Ghc.L _ ctx) (Ghc.L _ body) ->
-      isTargetTy (quals ++ fmap Ghc.unLoc ctx) body
-    app@Ghc.HsAppTy{} -> check quals app
-    var@Ghc.HsTyVar{} -> check quals var
-    Ghc.HsFunTy _ _ _ (Ghc.L _ nxt) -> isTargetTy quals nxt
-    Ghc.HsParTy _ (Ghc.L _ nxt) -> isTargetTy quals nxt
-    Ghc.HsDocTy _ (Ghc.L _ nxt) _ -> isTargetTy quals nxt
+      isTargetTy (preds ++ fmap Ghc.unLoc ctx) body
+    app@Ghc.HsAppTy{} -> check preds app
+    var@Ghc.HsTyVar{} -> check preds var
+    Ghc.HsFunTy _ _ _ (Ghc.L _ nxt) -> isTargetTy preds nxt
+    Ghc.HsParTy _ (Ghc.L _ nxt) -> isTargetTy preds nxt
+    Ghc.HsDocTy _ (Ghc.L _ nxt) _ -> isTargetTy preds nxt
     _ -> False
 
   check
     :: [Ghc.HsType Ghc.GhcPs]
     -> Ghc.HsType Ghc.GhcPs
     -> Bool
-  check quals expr =
-    any (matchTarget quals expr) (Config.targets cfg)
-    && not (any (matchTarget quals expr) (Config.exclusions cfg))
+  check preds expr =
+    any (matchTarget preds expr) (Config.targets cfg)
+    && not (any (matchTarget preds expr) (Config.exclusions cfg))
 
-  matchTarget _ expr (Config.Constructor conTarget) =
-    checkTy True conTarget expr
-
-  matchTarget quals _ (Config.Constraints predTarget) =
-    checkPred quals predTarget
+  matchTarget preds expr = \case
+    Config.Constructor conTarget -> checkTy True conTarget expr
+    Config.Constraints predTarget -> checkPred preds predTarget
 
   checkTy
     :: Bool
@@ -118,8 +116,8 @@ getMatches cfg = concat . mapMaybe go where
     :: [Ghc.HsType Ghc.GhcPs]
     -> Config.ConstraintSet
     -> Bool
-  checkPred quals predSet =
-    all (\p -> any (checkTy True p) quals)
+  checkPred preds predSet =
+    all (\p -> any (checkTy True p) preds)
         (S.toList predSet)
 
 instrumentDecl
