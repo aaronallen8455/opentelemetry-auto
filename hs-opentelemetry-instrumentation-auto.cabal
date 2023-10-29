@@ -37,7 +37,8 @@ library
       hs-opentelemetry-api,
       syb,
       text,
-      toml-parser
+      toml-parser,
+      parsec
     hs-source-dirs:   src
     default-language: GHC2021
 

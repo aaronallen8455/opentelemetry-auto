@@ -15,7 +15,9 @@ import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified System.Directory as Dir
-import qualified Text.ParserCombinators.ReadP as P
+import qualified Text.Parsec as P
+import qualified Text.Parsec.Error as P
+import qualified Text.Parsec.String as P
 import qualified Toml.FromValue as Toml
 import qualified Toml
 
@@ -46,21 +48,24 @@ data TargetCon
   | Tuple [TargetCon]
   deriving (Show, Eq, Ord)
 
-targetParser :: P.ReadP TargetCon
+skipSpaces :: P.Parser ()
+skipSpaces = P.skipMany P.space
+
+targetParser :: P.Parser TargetCon
 targetParser = appP
   where
-    appP = P.chainl1 (unitP <|> varP <|> parenP) (pure App) <* P.skipSpaces
-    unitP = Unit <$ P.string "()" <* P.skipSpaces
+    appP = P.chainl1 (P.try unitP <|> varP <|> parenP) (pure App) <* skipSpaces
+    unitP = Unit <$ P.string "()" <* skipSpaces
     varP = do
-      v <- P.munch1 (\c -> c `notElem` [' ', '(', ')', ',']) <* P.skipSpaces
+      v <- P.many1 (P.satisfy $ \c -> c `notElem` [' ', '(', ')', ',']) <* skipSpaces
       case v of
         "_" -> pure WC
         _ -> pure $ TyVar v
     parenP = do
       inParens <-
-        P.between (P.char '(' <* P.skipSpaces) (P.char ')')
-          (P.sepBy1 targetParser (P.char ',' <* P.skipSpaces))
-          <* P.skipSpaces
+        P.between (P.char '(' <* skipSpaces) (P.char ')')
+          (P.sepBy1 targetParser (P.char ',' <* skipSpaces))
+          <* skipSpaces
       case inParens of
         [t] -> pure t
         _ -> pure $ Tuple inParens
@@ -79,17 +84,24 @@ instance Toml.FromValue Target where
     case tag of
       "constructor" -> do
         value <- Toml.reqKey "value"
-        case P.readP_to_S (P.skipSpaces *> targetParser <* P.eof) value of
-          [(targets, "")] -> pure $ Constructor targets
-          _ -> fail "failed to parse target"
+        case P.parse (skipSpaces *> targetParser <* P.eof) "" value of
+          Right target -> pure $ Constructor target
+          Left err -> fail $ showParsecError err
       "constraints" -> do
         value <- Toml.reqKey "value"
         let parsePred v =
-              case P.readP_to_S (P.skipSpaces *> targetParser <* P.eof) v of
-                [(target, "")] -> pure target
-                _ -> fail "failed to parse constraint target"
+              case P.parse (skipSpaces *> targetParser <* P.eof) "" v of
+                Right target -> pure target
+                Left err -> fail $ showParsecError err
         Constraints . S.fromList <$> traverse parsePred value
       _ -> fail $ "Unrecognized targed type: " <> tag
+
+-- | Doesn't show the source location
+showParsecError :: P.ParseError -> String
+showParsecError
+  = drop 1
+  . P.showErrorMessages "or" "unknown parse error" "expecting" "unexpected" "end of input"
+  . P.errorMessages
 
 readConfigFile :: [Ghc.CommandLineOption] -> IO (Maybe Config)
 readConfigFile opts = do
