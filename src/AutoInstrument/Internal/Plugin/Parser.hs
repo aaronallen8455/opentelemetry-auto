@@ -35,19 +35,10 @@ parsedResultAction opts modSummary
   let occ = Ghc.mkVarOcc "autoInstrument"
   autoInstrumentName <- liftIO $ Ghc.lookupNameCache (Ghc.hsc_NC hscEnv) otelMod occ
 
-  mConfig <- liftIO $ Config.readConfigFile opts
+  mEConfig <- liftIO $ Config.readConfigFile opts
 
-  case mConfig of
-    Nothing -> liftIO $ do
-      putStrLn "================================================================================"
-      putStrLn "Failed to parse auto instrument config file"
-      putStrLn "================================================================================"
-      pure parsedResult
-      -- TODO emit a parse error
---         { Ghc.parsedResultMessages = Ghc.parsedResultMessages parsedResult
---           { Ghc.psErrors =
---           }
---         }
+  case mEConfig of
+    Nothing -> pure parsedResult
     Just config -> do
       let matches = S.fromList $ getMatches config hsmodDecls
 
@@ -164,7 +155,7 @@ instrumentMatch modName unitId bindName instrName match =
                        . Ghc.HsString Ghc.NoSourceText
           app :: Ghc.LHsExpr Ghc.GhcPs -> Ghc.LHsExpr Ghc.GhcPs -> Ghc.LHsExpr Ghc.GhcPs
           app l r = Ghc.L Ghc.noSrcSpanA $ Ghc.HsApp Ghc.noAnn l r
-          srcSpan = Ghc.la2r loc
+          srcSpan = Ghc.realSrcSpan . Ghc.locA $ loc :: Ghc.RealSrcSpan
           instr =
             Ghc.L Ghc.noSrcSpanA instrVar
               `app`

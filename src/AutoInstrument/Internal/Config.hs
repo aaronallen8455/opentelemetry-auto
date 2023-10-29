@@ -11,11 +11,13 @@ module AutoInstrument.Internal.Config
   ) where
 
 import           Control.Applicative ((<|>))
-import           Data.Aeson
+import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified System.Directory as Dir
 import qualified Text.ParserCombinators.ReadP as P
+import qualified Toml.FromValue as Toml
+import qualified Toml
 
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
 
@@ -65,23 +67,23 @@ targetParser = appP
 
 type ConstraintSet = Set TargetCon
 
-instance FromJSON Config where
-  parseJSON = withObject "Config" $ \obj ->
+instance Toml.FromValue Config where
+  fromValue = Toml.parseTableFromValue $
     MkConfig
-      <$> obj .: "targets"
-      <*> obj .: "exclusions"
+      <$> Toml.reqKey "targets"
+      <*> (fromMaybe [] <$> Toml.optKey "exclusions")
 
-instance FromJSON Target where
-  parseJSON = withObject "Target" $ \obj -> do
-    tag <- obj .: "type"
+instance Toml.FromValue Target where
+  fromValue = Toml.parseTableFromValue $ do
+    tag <- Toml.reqKey "type"
     case tag of
       "constructor" -> do
-        value <- obj .: "value"
+        value <- Toml.reqKey "value"
         case P.readP_to_S (P.skipSpaces *> targetParser <* P.eof) value of
           [(targets, "")] -> pure $ Constructor targets
           _ -> fail "failed to parse target"
       "constraints" -> do
-        value <- obj .: "value"
+        value <- Toml.reqKey "value"
         let parsePred v =
               case P.readP_to_S (P.skipSpaces *> targetParser <* P.eof) v of
                 [(target, "")] -> pure target
@@ -91,14 +93,26 @@ instance FromJSON Target where
 
 readConfigFile :: [Ghc.CommandLineOption] -> IO (Maybe Config)
 readConfigFile opts = do
-  let config = getConfigFilePath opts
-  exists <- Dir.doesFileExist config
+  let cfgFile = getConfigFilePath opts
+  exists <- Dir.doesFileExist cfgFile
   if exists
-     then decodeFileStrict config
+     then do
+       result <- Toml.decode <$> readFile cfgFile
+       case result of
+         Toml.Success _ config -> pure $ Just config
+         Toml.Failure errs -> do
+           putStr $ unlines
+            $ "================================================================================"
+            : "Failed to parse auto instrument config file:"
+            : errs
+            ++ ["================================================================================"]
+           pure Nothing
      else do
-       putStrLn "================================================================="
-       putStrLn "Auto instrument config not found! The plugin will have no effect."
-       putStrLn "================================================================="
+       putStr $ unlines
+        [ "================================================================================"
+        , "Auto instrument config not found! The plugin will have no effect."
+        , "================================================================================"
+        ]
        pure Nothing
 
 getConfigFilePath :: [Ghc.CommandLineOption] -> FilePath
@@ -106,4 +120,4 @@ getConfigFilePath (opt : _) = opt
 getConfigFilePath [] = defaultConfigFile
 
 defaultConfigFile :: FilePath
-defaultConfigFile = "auto-instrument-config.json"
+defaultConfigFile = "auto-instrument-config.toml"

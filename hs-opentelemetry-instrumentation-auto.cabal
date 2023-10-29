@@ -31,13 +31,13 @@ library
       base >=4.17.0.0 && <4.20.0.0,
       bytestring,
       ghc >=9.4.0 && <9.8.0,
-      aeson,
       directory,
       containers,
       unliftio,
       hs-opentelemetry-api,
       syb,
-      text
+      text,
+      toml-parser
     hs-source-dirs:   src
     default-language: GHC2021
 
