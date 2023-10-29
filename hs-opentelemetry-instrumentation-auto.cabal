@@ -28,9 +28,9 @@ library
     -- other-modules:
     -- other-extensions:
     build-depends:
-      base >=4.17.0.0,
+      base >=4.17.0.0 && <4.20.0.0,
       bytestring,
-      ghc,
+      ghc >=9.4.0 && <9.8.0,
       aeson,
       directory,
       containers,
@@ -50,7 +50,7 @@ test-suite auto-instrument-test
     hs-source-dirs:   test
     main-is:          Main.hs
     build-depends:
-        base >=4.17.0.0,
+        base,
         auto-instrument
 
 -- executable play
