@@ -39,6 +39,12 @@ parsedResultAction opts modSummary
 
   case mConfig of
     Nothing -> pure parsedResult
+      { Ghc.parsedResultMessages = (Ghc.parsedResultMessages parsedResult)
+        { Ghc.psErrors =
+            let msg = Ghc.mkParseError "Failed to load auto instrumentation config"
+             in Ghc.addMessage msg . Ghc.psErrors $ Ghc.parsedResultMessages parsedResult
+        }
+      }
     Just config -> do
       let matches = S.fromList $ getMatches config hsmodDecls
 

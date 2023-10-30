@@ -4,6 +4,8 @@ write tests
 
 instrument local definitions if they have a sig
 
-possible to cache the config file to prevent reading from disk every time?
+use hscParseExpr for targets rather than a custom AST
 
-fail to compile if config file is missing or invalid
+have annotations to specify a span kind and maybe some other attributes
+
+write warning about instrumenting the code that initializes the tracer provider

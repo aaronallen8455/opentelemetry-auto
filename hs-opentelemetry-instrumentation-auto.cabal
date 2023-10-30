@@ -55,14 +55,14 @@ test-suite auto-instrument-test
         base,
         auto-instrument
 
--- executable play
---   hs-source-dirs: play
---   default-language: GHC2021
---   main-is: Main.hs
---   build-depends:
---     base >=4.17.0.0,
---     hs-opentelemetry-instrumentation-auto,
---     hs-opentelemetry-sdk,
---     unliftio,
---     transformers
---   ghc-options: -fplugin AutoInstrument
+executable play
+  hs-source-dirs: play
+  default-language: GHC2021
+  main-is: Main.hs
+  build-depends:
+    base >=4.17.0.0,
+    hs-opentelemetry-instrumentation-auto,
+    hs-opentelemetry-sdk,
+    unliftio,
+    transformers
+  ghc-options: -fplugin AutoInstrument
