@@ -10,7 +10,7 @@ import           Data.Maybe (mapMaybe)
 import qualified Data.Set as S
 
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
-import qualified AutoInstrument.Internal.Config as Config
+import qualified AutoInstrument.Internal.Config as Cfg
 
 parsedResultAction
   :: [Ghc.CommandLineOption]
@@ -35,9 +35,9 @@ parsedResultAction opts modSummary
   let occ = Ghc.mkVarOcc "autoInstrument"
   autoInstrumentName <- liftIO $ Ghc.lookupNameCache (Ghc.hsc_NC hscEnv) otelMod occ
 
-  mEConfig <- liftIO $ Config.readConfigFile opts
+  mConfig <- liftIO $ fmap Cfg.getConfig <$> Cfg.getConfigCache opts
 
-  case mEConfig of
+  case mConfig of
     Nothing -> pure parsedResult
     Just config -> do
       let matches = S.fromList $ getMatches config hsmodDecls
@@ -53,7 +53,7 @@ parsedResultAction opts modSummary
         }
 
 getMatches
-  :: Config.Config
+  :: Cfg.Config
   -> [Ghc.LHsDecl Ghc.GhcPs]
   -> [Ghc.OccName]
 getMatches cfg = concat . mapMaybe go where
@@ -76,36 +76,36 @@ getMatches cfg = concat . mapMaybe go where
     -> Ghc.HsType Ghc.GhcPs
     -> Bool
   check preds expr =
-    any (matchTarget preds expr) (Config.targets cfg)
-    && not (any (matchTarget preds expr) (Config.exclusions cfg))
+    any (matchTarget preds expr) (Cfg.targets cfg)
+    && not (any (matchTarget preds expr) (Cfg.exclusions cfg))
 
   matchTarget preds expr = \case
-    Config.Constructor conTarget -> checkTy True conTarget expr
-    Config.Constraints predTarget -> checkPred preds predTarget
+    Cfg.Constructor conTarget -> checkTy True conTarget expr
+    Cfg.Constraints predTarget -> checkPred preds predTarget
 
   checkTy
     :: Bool
-    -> Config.TargetCon
+    -> Cfg.TargetCon
     -> Ghc.HsType Ghc.GhcPs
     -> Bool
   checkTy top t (Ghc.HsParTy _ (Ghc.L _ x)) = checkTy top t x
   checkTy top t (Ghc.HsDocTy _ (Ghc.L _ x) _) = checkTy top t x
-  checkTy _ (Config.TyVar name) (Ghc.HsTyVar _ _ (Ghc.L _ rdrName)) =
+  checkTy _ (Cfg.TyVar name) (Ghc.HsTyVar _ _ (Ghc.L _ rdrName)) =
     BS8.pack name == Ghc.bytesFS (Ghc.occNameFS $ Ghc.rdrNameOcc rdrName)
-  checkTy top target@(Config.App x y) (Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ arg)) =
+  checkTy top target@(Cfg.App x y) (Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ arg)) =
     (checkTy False y arg && checkTy False x con )
     || (top && checkTy True target con)
-  checkTy True target@(Config.TyVar _) (Ghc.HsAppTy _ (Ghc.L _ con) _) =
+  checkTy True target@(Cfg.TyVar _) (Ghc.HsAppTy _ (Ghc.L _ con) _) =
     checkTy True target con
-  checkTy _ Config.Unit (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple []) = True
-  checkTy _ (Config.Tuple targets) (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple exprs) =
+  checkTy _ Cfg.Unit (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple []) = True
+  checkTy _ (Cfg.Tuple targets) (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple exprs) =
     and $ zipWith (checkTy False) targets (Ghc.unLoc <$> exprs)
-  checkTy _ Config.WC _ = True
+  checkTy _ Cfg.WC _ = True
   checkTy _ _ _ = False
 
   checkPred
     :: [Ghc.HsType Ghc.GhcPs]
-    -> Config.ConstraintSet
+    -> Cfg.ConstraintSet
     -> Bool
   checkPred preds predSet =
     all (\p -> any (checkTy True p) preds)

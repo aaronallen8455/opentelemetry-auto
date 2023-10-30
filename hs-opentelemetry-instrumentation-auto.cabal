@@ -38,7 +38,8 @@ library
       syb,
       text,
       toml-parser,
-      parsec
+      parsec,
+      time
     hs-source-dirs:   src
     default-language: GHC2021
 

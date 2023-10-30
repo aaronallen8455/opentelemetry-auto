@@ -1,13 +1,9 @@
-There a bug in version 0.1.0.0 of the open telemetry api package that causes the
-wrong call stack entry to be used. Might want to have `autoInstrument` take an
-explicit CallStack to be impervious to such version depedent issues.
-
-The function attribute should be the function being instrumented, not `inSpan`
-and the code location should be location of the function definition, not the
-callsite of `inSpan`.
-
 write docs
 
 write tests
 
-Show parse error messages to user
+instrument local definitions if they have a sig
+
+possible to cache the config file to prevent reading from disk every time?
+
+fail to compile if config file is missing or invalid

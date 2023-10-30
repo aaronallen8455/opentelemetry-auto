@@ -2,9 +2,7 @@ module AutoInstrument.Internal.Plugin
   ( plugin
   ) where
 
-import qualified System.Directory as Dir
-
-import           AutoInstrument.Internal.Config (defaultConfigFile)
+import qualified AutoInstrument.Internal.Config as Cfg
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
 import qualified AutoInstrument.Internal.Plugin.Parser as Parser
 
@@ -16,16 +14,8 @@ plugin = Ghc.defaultPlugin
 
 pluginRecompile :: [Ghc.CommandLineOption] -> IO Ghc.PluginRecompile
 pluginRecompile opts = do
-  let config = getConfigFilePath opts
-  exists <- Dir.doesFileExist config
-  if exists
-     then Ghc.MaybeRecompile <$> Ghc.getFileHash config
-     else do
-       putStrLn "================================================================="
-       putStrLn "Auto instrument config not found! The plugin will have no effect."
-       putStrLn "================================================================="
-       pure Ghc.NoForceRecompile
-
-getConfigFilePath :: [Ghc.CommandLineOption] -> FilePath
-getConfigFilePath (opt : _) = opt
-getConfigFilePath [] = defaultConfigFile
+  mCache <- Cfg.getConfigCache opts
+  case mCache of
+    Nothing -> pure Ghc.NoForceRecompile
+    Just cache ->
+     pure . Ghc.MaybeRecompile $ Cfg.fingerprint cache

@@ -2,8 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module AutoInstrument.Internal.Config
   ( Config(..)
+  , ConfigCache(..)
   , Target(..)
-  , readConfigFile
+  , getConfigCache
   , getConfigFilePath
   , defaultConfigFile
   , TargetCon(..)
@@ -11,10 +12,14 @@ module AutoInstrument.Internal.Config
   ) where
 
 import           Control.Applicative ((<|>))
+import           Control.Concurrent.MVar
+import           Data.IORef
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.Time
 import qualified System.Directory as Dir
+import           System.IO.Unsafe (unsafePerformIO)
 import qualified Text.Parsec as P
 import qualified Text.Parsec.Error as P
 import qualified Text.Parsec.String as P
@@ -23,13 +28,25 @@ import qualified Toml
 
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
 
--- Implementing constraint targets in such a way that the target of the constraint
--- is taken into account gets rather complicated. Currently constraints are matched
--- using the same process as simple constructor matching however this can result
--- in situations where the constraint matches but its subject type does not
--- appear in the result type where it would need to. A workaround is to allow
--- the user to define a list of exclusions so that those particular constructors
--- can be ignored even if the constraint context matches.
+data ConfigCache = MkConfigCache
+  { timestamp :: !UTCTime
+  , getConfig :: !Config
+  , fingerprint :: !Ghc.Fingerprint
+  }
+
+configCache :: IORef (Maybe ConfigCache)
+configCache = unsafePerformIO $ newIORef Nothing
+{-# NOINLINE configCache #-}
+
+-- | Used to ensure that the config file is only read by one thread when the
+-- cache expires or needs to be initialized.
+semaphore :: MVar ()
+semaphore = unsafePerformIO $ newMVar ()
+{-# NOINLINE semaphore #-}
+
+-- Cache expires after 20 seconds
+cacheDuration :: NominalDiffTime
+cacheDuration = 20
 
 data Config = MkConfig
   { targets :: [Target]
@@ -103,15 +120,59 @@ showParsecError
   . P.showErrorMessages "or" "unknown parse error" "expecting" "unexpected" "end of input"
   . P.errorMessages
 
-readConfigFile :: [Ghc.CommandLineOption] -> IO (Maybe Config)
-readConfigFile opts = do
+getConfigCache :: [Ghc.CommandLineOption] -> IO (Maybe ConfigCache)
+getConfigCache opts = do
+  mCached <- readIORef configCache
+  case mCached of
+    Nothing -> getConfigOrRefresh opts
+    Just cached -> do
+      expired <- isCacheExpired cached
+      if expired
+      then getConfigOrRefresh opts
+      else pure $ Just cached
+
+-- | This blocks on the MVar to ensure that the file is only read by one thread when necessary.
+-- contention for the MVar only occurs when the cache expires or hasn't been initialized.
+getConfigOrRefresh :: [Ghc.CommandLineOption] -> IO (Maybe ConfigCache)
+getConfigOrRefresh opts = do
+  withMVar semaphore $ \_ -> do
+    mCached <- readIORef configCache
+    case mCached of
+      Nothing -> refreshConfigCache opts
+      Just existing -> do
+        expired <- isCacheExpired existing
+        if expired
+        then refreshConfigCache opts
+        else pure $ Just existing
+
+isCacheExpired :: ConfigCache -> IO Bool
+isCacheExpired cached = do
+  now <- getCurrentTime
+  let diff = diffUTCTime now $ timestamp cached
+  pure $ diff >= cacheDuration
+
+refreshConfigCache :: [Ghc.CommandLineOption] -> IO (Maybe ConfigCache)
+refreshConfigCache opts = do
+  newCache <- mkConfigCache opts
+  writeIORef configCache newCache
+  pure newCache
+
+mkConfigCache :: [Ghc.CommandLineOption] -> IO (Maybe ConfigCache)
+mkConfigCache opts = do
   let cfgFile = getConfigFilePath opts
   exists <- Dir.doesFileExist cfgFile
   if exists
      then do
        result <- Toml.decode <$> readFile cfgFile
        case result of
-         Toml.Success _ config -> pure $ Just config
+         Toml.Success _ config -> do
+           now <- getCurrentTime
+           fp <- Ghc.getFileHash cfgFile
+           pure $ Just MkConfigCache
+             { timestamp = now
+             , getConfig = config
+             , fingerprint = fp
+             }
          Toml.Failure errs -> do
            putStr $ unlines
             $ "================================================================================"
