@@ -5,8 +5,6 @@ open telemetry spans based on user configuration. The instrumentation
 functionality is provided by the
 [`hs-opentelemetry`](https://github.com/iand675/hs-opentelemetry) project.
 
-This package is under development and not quite production ready.
-
 ### Quick start
 
 - Add this package as a project dependency
@@ -19,6 +17,11 @@ This package is under development and not quite production ready.
   Replace `MyAppMonad` with your application's primary monad. This monad needs
   to have an instance for `MonadUnliftIO`, otherwise you'll get
   type errors.
+- Initialize the global tracer provider as part of application startup. The
+  plugin will not insert spans until after the gobal tracer provider has been
+  initialized. See the
+  [`hs-opentelemetry-sdk` documentation](https://hackage.haskell.org/package/hs-opentelemetry-sdk)
+  for directions.
 - Pass the `-fplugin AutoInstrument` argument to GHC when compiling the project.
 - Only top-level functions that have type signatures with a return type that
   matches the target monad will be instrumented.
