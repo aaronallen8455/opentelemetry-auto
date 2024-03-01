@@ -133,6 +133,9 @@ t15 = pure ()
 t16 :: X2 => Instrumented ()
 t16 = pure ()
 
+t17 :: a -> Instrumented a
+t17 = pure
+
 main :: IO ()
 main =
   withGlobalTracing $ \spansChan -> do
@@ -148,6 +151,7 @@ testTree spansChan = testGroup "Tests"
   , testCase "rule with wildcard placeholder" (wildCard spansChan)
   , testCase "multi constraint rule" (multiPred spansChan)
   , testCase "multi constraint exclusion" (multiPredX spansChan)
+  , testCase "point-free" (pointFree spansChan)
   ]
 
 nestedSpans :: OutChan ImmutableSpan -> Assertion
@@ -220,6 +224,13 @@ multiPredX spansChan = do
   spans <- getSpans spansChan
   spans @?=
     [ spanInfo "134" "t16" Nothing ]
+
+pointFree :: OutChan ImmutableSpan -> Assertion
+pointFree spansChan = do
+  t17 ()
+  spans <- getSpans spansChan
+  spans @?=
+    [ spanInfo "137" "t17" Nothing ]
 
 spanInfo :: Text -> Text -> Maybe Text -> SpanInfo
 spanInfo lineNo funName mParentName =

@@ -39,7 +39,9 @@ mkParseError :: String -> MsgEnvelope PsMessage
 mkParseError
   = Ghc.mkPlainErrorMsgEnvelope (Ghc.mkGeneralSrcSpan "plugin")
   . Ghc.PsUnknownMessage
-#if MIN_VERSION_ghc (9,6,0)
+#if MIN_VERSION_ghc (9,8,0)
+  . Ghc.mkUnknownDiagnostic
+#elif MIN_VERSION_ghc (9,6,0)
   . Ghc.UnknownDiagnostic
 #endif
   . Ghc.mkPlainError Ghc.noHints

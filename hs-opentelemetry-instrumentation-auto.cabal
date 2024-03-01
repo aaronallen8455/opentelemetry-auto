@@ -32,14 +32,14 @@ library
     build-depends:
       base >=4.17.0.0 && <4.20.0.0,
       bytestring,
-      ghc >=9.4.0 && <9.8.0,
+      ghc >=9.4.0 && <9.9.0,
       directory,
       containers,
       unliftio,
       hs-opentelemetry-api,
       syb,
       text,
-      toml-parser,
+      toml-parser >= 2.0.0.0 && < 3.0.0.0,
       parsec,
       time
     hs-source-dirs:   src
@@ -54,29 +54,29 @@ test-suite auto-instrument-test
     hs-source-dirs:   test
     main-is:          Main.hs
     build-depends:
-        base,
-        unordered-containers,
-        hs-opentelemetry-instrumentation-auto,
-        hs-opentelemetry-exporter-in-memory,
-        hs-opentelemetry-api,
-        hs-opentelemetry-sdk,
-        tasty-hunit,
-        tasty,
-        unliftio,
-        text
+      base >=4.17.0.0 && <4.20.0.0,
+      unordered-containers,
+      hs-opentelemetry-instrumentation-auto,
+      hs-opentelemetry-exporter-in-memory,
+      hs-opentelemetry-api,
+      hs-opentelemetry-sdk,
+      tasty-hunit,
+      tasty,
+      unliftio,
+      text
     ghc-options:
       -threaded
       -fplugin AutoInstrument
       -fplugin-opt AutoInstrument:test-config.toml
 
-executable play
-  hs-source-dirs: play
-  default-language: GHC2021
-  main-is: Main.hs
-  build-depends:
-    base >=4.17.0.0,
-    hs-opentelemetry-instrumentation-auto,
-    hs-opentelemetry-sdk,
-    unliftio,
-    transformers
-  ghc-options: -fplugin AutoInstrument
+-- executable play
+--   hs-source-dirs: play
+--   default-language: GHC2021
+--   main-is: Main.hs
+--   build-depends:
+--     base >=4.17.0.0,
+--     hs-opentelemetry-instrumentation-auto,
+--     hs-opentelemetry-sdk,
+--     unliftio,
+--     transformers
+--   ghc-options: -fplugin AutoInstrument
