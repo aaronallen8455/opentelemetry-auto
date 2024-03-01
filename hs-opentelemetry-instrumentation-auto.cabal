@@ -10,8 +10,10 @@ maintainer:         aaronallen8455@gmail.com
 -- copyright:
 category:           Development
 build-type:         Simple
-extra-doc-files:    CHANGELOG.md
--- extra-source-files:
+extra-doc-files:
+  CHANGELOG.md
+  README.md
+extra-source-files: test-config.toml
 
 common warnings
     ghc-options: -Wall
@@ -53,7 +55,19 @@ test-suite auto-instrument-test
     main-is:          Main.hs
     build-depends:
         base,
-        auto-instrument
+        unordered-containers,
+        hs-opentelemetry-instrumentation-auto,
+        hs-opentelemetry-exporter-in-memory,
+        hs-opentelemetry-api,
+        hs-opentelemetry-sdk,
+        tasty-hunit,
+        tasty,
+        unliftio,
+        text
+    ghc-options:
+      -threaded
+      -fplugin AutoInstrument
+      -fplugin-opt AutoInstrument:test-config.toml
 
 executable play
   hs-source-dirs: play

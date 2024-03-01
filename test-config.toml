@@ -1,0 +1,14 @@
+targets = [
+  { type = "constructor", value = "Instrumented" },
+  { type = "constructor", value = "Partial ()" },
+  { type = "constructor", value = "WildCard (Maybe _)" },
+  { type = "constraints", value = ["InstrumentC"] },
+  { type = "constraints", value = ["C1", "C2"] }
+]
+
+exclusions = [
+  { type = "constructor", value = "NotInstrumented" },
+  { type = "constraints", value = ["NoInstrumentC"] },
+  { type = "constructor", value = "WildCardX (Maybe _)" },
+  { type = "constraints", value = ["X1", "X2"] }
+]

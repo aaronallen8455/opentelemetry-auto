@@ -181,11 +181,6 @@ mkConfigCache opts = do
             ++ ["================================================================================"]
            pure Nothing
      else do
-       putStr $ unlines
-        [ "================================================================================"
-        , "Auto instrument config not found! The plugin will have no effect."
-        , "================================================================================"
-        ]
        pure Nothing
 
 getConfigFilePath :: [Ghc.CommandLineOption] -> FilePath
