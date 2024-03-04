@@ -2,7 +2,7 @@ cabal-version:      3.0
 name:               hs-opentelemetry-instrumentation-auto
 version:            0.1.0.0
 synopsis:           Plugin for instrumenting an application
--- description:
+description:        A GHC plugin that auto-instruments an application for open telementry tracing.
 license:            BSD-3-Clause
 license-file:       LICENSE
 author:             Aaron Allen
