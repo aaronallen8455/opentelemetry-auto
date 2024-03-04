@@ -15,8 +15,7 @@ functionality is provided by the
   value = "MyAppMonad"
   ```
   Replace `MyAppMonad` with your application's primary monad. This monad needs
-  to have an instance for `MonadUnliftIO`, otherwise you'll get
-  type errors.
+  to have an instance for `MonadUnliftIO`, otherwise you'll get a type error.
 - Initialize the global tracer provider as part of application startup. The
   plugin will not insert spans until after the gobal tracer provider has been
   initialized. See the
@@ -46,7 +45,47 @@ which functions to instrument:
   of these rules match a type signature, the corresponding declaration(s) will
   not be instrumented.
 
+#### Example config
+
+```toml
+# Targets are things that should be auto instrumented for tracing.
+# "constructor" means that it should match the return type of the function
+# while "constraints" means that all the constraints in the "value" array must
+# be present in the constraint context of the function.
+
+[[targets]]
+type = "constructor"
+value = "AppMonad"
+
+[[targets]]
+type = "constraints"
+value = ["MonadUnliftIO"]
+
+# Exclusions denote types that should not be instrumented. This is mostly
+# needed for when a target constraint appears in a definition's context but
+# doesn't apply directly to the return type, for example:
+# server :: ServerT Api AppMonad
+
+[[exclusions]]
+type = "constructor"
+value = "ServerT"
+
+[[exclusions]]
+type = "constructor"
+value = "ConduitT"
+```
+
 By default the plugin looks for a config file
 called `auto-instrument-config.toml` in the project root. You can change this
 by passing a config file path as a plugin option, for example: `-fplugin
 AutoInstrument -fplugin-opt AutoInstrument:my-config.toml`.
+
+### Pitfalls
+
+Functions that loop can be problematic when instrumented if a new span is
+entered for each iteration. For example, if an application has a process that
+continually performs some polling action in a loop, then instrumenting that
+process would result in a space leak due to the mass of nested spans being
+allocated and retained on the heap. One way for dealing with this is to define
+something like `type NotInstrumented a = a`, add an exclusion rule for it to
+the config, and apply it to the result type of any such looping functions.
