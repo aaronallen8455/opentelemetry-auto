@@ -26,7 +26,7 @@ functionality is provided by
   plugin will not insert spans until after the gobal tracer provider has been
   initialized. See the
   [`hs-opentelemetry-sdk` documentation](https://hackage.haskell.org/package/hs-opentelemetry-sdk)
-  for directions.
+  for instructions.
 - Pass the `-fplugin AutoInstrument` argument to GHC when compiling the project.
   This can be done project-wide in the `*.cabal` or `package.yaml` file using
   `ghc-options: -fplugin AutoInstrument`, or by adding
@@ -36,11 +36,13 @@ functionality is provided by
 
 ### Configuration
 
-Configuration is supplied by a user defined TOML file and is used to determine
-which functions should be instrumented. By default the plugin looks for a
-config file called `auto-instrument-config.toml` in the project root. You can
-change this by passing a config file path as a plugin option, for example:
-`-fplugin AutoInstrument -fplugin-opt AutoInstrument:my-config.toml`.
+Configuration is supplied by a user defined TOML file that declares a set of
+rules used to determine which functions should be instrumented. The plugin will
+only consider top level functions that have type signatures when matching
+against these rules. By default the plugin looks for a config file called
+`auto-instrument-config.toml` in the project root. You can change this by
+passing a config file path as a plugin option, for example: `-fplugin
+AutoInstrument -fplugin-opt AutoInstrument:my-config.toml`.
 
 #### Config structure
 
