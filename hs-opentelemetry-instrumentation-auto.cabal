@@ -17,6 +17,10 @@ extra-source-files: test-config.toml
 tested-with:
   GHC == 9.4.8
   GHC == 9.6.2
+bug-reports: https://github.com/aaronallen8455/opentelemetry-auto/issues
+source-repository head
+    type: git
+    location: https://github.com/aaronallen8455/opentelemetry-auto/issues
 
 common warnings
     ghc-options: -Wall
