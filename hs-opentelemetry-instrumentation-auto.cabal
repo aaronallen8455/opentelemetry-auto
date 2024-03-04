@@ -41,7 +41,7 @@ library
       unliftio ^>= 0.2,
       hs-opentelemetry-api ^>= 0.0.3 || ^>= 0.1,
       text ^>= 2.0,
-      toml-parser >= 1.0.0.0 && < 3.0.0.0,
+      toml-parser >= 2.0.0.0 && < 3.0.0.0,
       parsec ^>= 3.1,
       time ^>= 1.12
     hs-source-dirs:   src

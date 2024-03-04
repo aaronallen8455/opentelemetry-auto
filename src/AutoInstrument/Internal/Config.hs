@@ -18,18 +18,14 @@ import           Data.IORef
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import qualified Data.Text.IO as T
 import           Data.Time
 import qualified System.Directory as Dir
 import           System.IO.Unsafe (unsafePerformIO)
 import qualified Text.Parsec as P
 import qualified Text.Parsec.Error as P
 import qualified Text.Parsec.String as P
-#if MIN_VERSION_toml_parser(2,0,0)
-import qualified Data.Text.IO as T
 import qualified Toml.Schema.FromValue as Toml
-#else
-import qualified Toml.FromValue as Toml
-#endif
 import qualified Toml
 
 import qualified AutoInstrument.Internal.GhcFacade as Ghc
@@ -169,12 +165,7 @@ mkConfigCache opts = do
   exists <- Dir.doesFileExist cfgFile
   if exists
      then do
-       result <- Toml.decode <$>
-#if MIN_VERSION_toml_parser(2,0,0)
-         T.readFile cfgFile
-#else
-         readFile cfgFile
-#endif
+       result <- Toml.decode <$> T.readFile cfgFile
        case result of
          Toml.Success _ config -> do
            now <- getCurrentTime
