@@ -2,8 +2,14 @@
 
 This is a GHC plugin for automatically instrumenting a Haskell application with
 open telemetry spans based on user configuration. The instrumentation
-functionality is provided by the
-[`hs-opentelemetry`](https://github.com/iand675/hs-opentelemetry) project.
+functionality is provided by
+[`hs-opentelemetry`](https://github.com/iand675/hs-opentelemetry).
+
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+  - [Config structure](#config-structure)
+  - [Example config](#example-config)
+- [Known pitfalls](#known-pitfalls)
 
 ### Quick start
 
@@ -22,13 +28,22 @@ functionality is provided by the
   [`hs-opentelemetry-sdk` documentation](https://hackage.haskell.org/package/hs-opentelemetry-sdk)
   for directions.
 - Pass the `-fplugin AutoInstrument` argument to GHC when compiling the project.
+  This can be done project-wide in the `*.cabal` or `package.yaml` file using
+  `ghc-options: -fplugin AutoInstrument`, or by adding
+  `{- OPTIONS_GHC -fplugin AutoInstrument -}` to individual modules.
 - Only top-level functions that have type signatures with a return type that
   matches the target monad will be instrumented.
 
-### Configuration options
+### Configuration
 
 Configuration is supplied by a user defined TOML file and is used to determine
-which functions to instrument:
+which functions should be instrumented. By default the plugin looks for a
+config file called `auto-instrument-config.toml` in the project root. You can
+change this by passing a config file path as a plugin option, for example:
+`-fplugin AutoInstrument -fplugin-opt AutoInstrument:my-config.toml`.
+
+#### Config structure
+
 - The `targets` key is an array of tables that specify how to identify a function
   to instrument based on its type signature.
 - These tables have a `type` field that can either `"constructor"` or `"constraints"`
@@ -38,7 +53,7 @@ which functions to instrument:
     arguments to this type and arguments that should be ignored can replaced with
     an underscore.
   - `"constraints"` allows for a set of constraints to be specified which must
-    be contained by the constraint context of a function in order for it to
+    all be present in the constraint context of a function in order for it to
     be instrumented. The `value` field should be an array of constraint types
     which do not need to be fully applied and can have underscore wildcards.
 - The `exclusions` key is an array with the same structure as `targets`. If any
@@ -61,10 +76,10 @@ value = "AppMonad"
 type = "constraints"
 value = ["MonadUnliftIO"]
 
-# Exclusions denote types that should not be instrumented. This is mostly
+# Exclusions denote types that should not be instrumented. This is primarily
 # needed for when a target constraint appears in a definition's context but
 # doesn't apply directly to the return type, for example:
-# server :: ServerT Api AppMonad
+# server :: MonadUnliftIO m => ServerT Api m
 
 [[exclusions]]
 type = "constructor"
@@ -75,17 +90,27 @@ type = "constructor"
 value = "ConduitT"
 ```
 
-By default the plugin looks for a config file
-called `auto-instrument-config.toml` in the project root. You can change this
-by passing a config file path as a plugin option, for example: `-fplugin
-AutoInstrument -fplugin-opt AutoInstrument:my-config.toml`.
-
-### Pitfalls
+### Known pitfalls
 
 Functions that loop can be problematic when instrumented if a new span is
 entered for each iteration. For example, if an application has a process that
 continually performs some polling action in a loop, then instrumenting that
 process would result in a space leak due to the mass of nested spans being
 allocated and retained on the heap. One way for dealing with this is to define
-something like `type NotInstrumented a = a`, add an exclusion rule for it to
-the config, and apply it to the result type of any such looping functions.
+a type synonym `type NotInstrumented a = a`, add an exclusion rule for it to
+the config, and apply it to the result type of any such looping functions:
+
+```haskell
+type NotInstrumented a = a
+
+loop :: NotInstrumented (MyApp ())
+loop = do
+  ...
+  loop
+```
+---
+```toml
+[[exclusions]]
+type = "constructor"
+value = "NotInstrumented"
+```

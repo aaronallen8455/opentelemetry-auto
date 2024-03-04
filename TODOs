@@ -1,11 +1,5 @@
-write docs
-
-write tests
-
 instrument local definitions if they have a sig
 
 use hscParseExpr for targets rather than a custom AST
 
 have annotations to specify a span kind and maybe some other attributes
-
-write warning about instrumenting the code that initializes the tracer provider
