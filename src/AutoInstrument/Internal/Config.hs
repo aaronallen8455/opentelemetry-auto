@@ -18,6 +18,7 @@ import           Data.IORef
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Data.Time
 import qualified System.Directory as Dir
@@ -25,6 +26,7 @@ import           System.IO.Unsafe (unsafePerformIO)
 import qualified Text.Parsec as P
 import qualified Text.Parsec.Error as P
 import qualified Text.Parsec.String as P
+import qualified Toml.Schema as Toml
 import qualified Toml.Schema.FromValue as Toml
 import qualified Toml
 
@@ -101,19 +103,23 @@ instance Toml.FromValue Target where
   fromValue = Toml.parseTableFromValue $ do
     tag <- Toml.reqKey "type"
     case tag of
-      "constructor" -> do
-        value <- Toml.reqKey "value"
-        case P.parse (skipSpaces *> targetParser <* P.eof) "" value of
-          Right target -> pure $ Constructor target
-          Left err -> fail $ showParsecError err
-      "constraints" -> do
-        value <- Toml.reqKey "value"
-        let parsePred v =
-              case P.parse (skipSpaces *> targetParser <* P.eof) "" v of
-                Right target -> pure target
-                Left err -> fail $ showParsecError err
-        Constraints . S.fromList <$> traverse parsePred value
-      _ -> fail $ "Unrecognized targed type: " <> tag
+      ConstructorType -> Constructor <$> Toml.reqKey "value"
+      ConstraintsType -> Constraints . S.fromList <$> Toml.reqKey "value"
+
+data TargetType = ConstructorType | ConstraintsType
+
+instance Toml.FromValue TargetType where
+  fromValue (Toml.Text' _ tag)
+    | tag == "constructor" = pure ConstructorType
+    | tag == "constraints" = pure ConstraintsType
+  fromValue v = Toml.failAt (Toml.valueAnn v) "must be 'constructor' or 'constraints'"
+
+instance Toml.FromValue TargetCon where
+  fromValue (Toml.Text' a v) =
+    case P.parse (skipSpaces *> targetParser <* P.eof) "" (T.unpack v) of
+      Right target -> pure target
+      Left err -> Toml.failAt a (showParsecError err)
+  fromValue v = Toml.typeError "string" v
 
 -- | Doesn't show the source location
 showParsecError :: P.ParseError -> String
