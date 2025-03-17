@@ -15,6 +15,7 @@ extra-doc-files:
   README.md
 extra-source-files: test-config.toml
 tested-with:
+  GHC == 9.8.2
   GHC == 9.4.8
   GHC == 9.6.2
 bug-reports: https://github.com/aaronallen8455/opentelemetry-auto/issues
@@ -44,7 +45,7 @@ library
       containers ^>= 0.6,
       unliftio ^>= 0.2,
       hs-opentelemetry-api ^>= 0.0.3 || ^>= 0.1,
-      text ^>= 2.0,
+      text ^>= 2.0 || ^>= 2.1,
       toml-parser >= 2.0.0.0 && < 3.0.0.0,
       parsec ^>= 3.1,
       time ^>= 1.12
