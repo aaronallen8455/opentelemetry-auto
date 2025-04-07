@@ -242,7 +242,7 @@ spanInfo lineNo funName mParentName =
       , ("code.filepath", AttributeValue (TextAttribute "test/Main.hs"))
       , ("code.function", AttributeValue (TextAttribute funName))
       , ("code.namespace", AttributeValue (TextAttribute "Main"))
-      , ("code.package", AttributeValue (TextAttribute "main"))
+      , ("code.package", AttributeValue (TextAttribute "hs-opentelemetry-instrumentation-auto-0.1.0.2-inplace-auto-instrument-test"))
       ]
     }
 

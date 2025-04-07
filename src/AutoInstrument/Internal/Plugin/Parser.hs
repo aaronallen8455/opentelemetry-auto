@@ -157,11 +157,11 @@ instrumentMatch modName unitId bindName instrName match =
     go :: Ghc.LHsExpr Ghc.GhcPs -> Ghc.LHsExpr Ghc.GhcPs
     go (Ghc.L loc x) =
       let instrVar = Ghc.HsVar Ghc.noExtField (Ghc.L Ghc.noSrcSpanA (Ghc.Exact instrName))
-          mkStringExpr = Ghc.L Ghc.noSrcSpanA . Ghc.HsLit Ghc.noAnn
+          mkStringExpr = Ghc.L Ghc.noSrcSpanA . Ghc.HsLit Ghc.noAnn'
                        . Ghc.HsString Ghc.NoSourceText
           app :: Ghc.LHsExpr Ghc.GhcPs -> Ghc.LHsExpr Ghc.GhcPs -> Ghc.LHsExpr Ghc.GhcPs
-          app l r = Ghc.L Ghc.noSrcSpanA $ Ghc.HsApp Ghc.noAnn l r
-          srcSpan = Ghc.realSrcSpan . Ghc.locA $ loc :: Ghc.RealSrcSpan
+          app l r = Ghc.L Ghc.noSrcSpanA $ Ghc.HsApp Ghc.noAnn' l r
+          srcSpan = Ghc.realSrcSpan . Ghc.getSrcSpan' $ loc :: Ghc.RealSrcSpan
           instr =
             Ghc.L Ghc.noSrcSpanA instrVar
               `app`
@@ -175,4 +175,4 @@ instrumentMatch modName unitId bindName instrName match =
               `app`
             mkStringExpr (Ghc.unitIdFS unitId)
 
-       in Ghc.L loc $ Ghc.HsApp Ghc.noAnn instr (Ghc.L loc x)
+       in Ghc.L loc $ Ghc.HsApp Ghc.noAnn' instr (Ghc.L loc x)
