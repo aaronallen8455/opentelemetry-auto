@@ -1,5 +1,9 @@
 # Revision history for auto-instrument
 
+## 0.1.0.3 -- 2025-11-18
+
+* Support GHC 9.12
+
 ## 0.1.0.2 -- 2025-04-06
 
 * Support GHC 9.10
