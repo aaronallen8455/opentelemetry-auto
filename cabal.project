@@ -1,4 +1,2 @@
 packages:
   *.cabal
-
-allow-newer: proto-lens-0.7.1.5:base

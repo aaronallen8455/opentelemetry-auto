@@ -57,12 +57,14 @@ jobs:
         cabal build --disable-tests --disable-benchmarks all
 
     - name: Build
+      # TODO remove --allow-newer when proto-lens is updated
       run: |
-        cabal build --enable-tests --enable-benchmarks all
+        cabal build --enable-tests --allow-newer --enable-benchmarks all
 
     - name: Test
+      # TODO remove --allow-newer when proto-lens is updated
       run: |
-        cabal test --enable-tests --enable-benchmarks all
+        cabal test --enable-tests --allow-newer --enable-benchmarks all
 
     - name: Check
       run: |

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE CPP #-}
 module Main (main) where
 
 import           Data.Kind (Constraint)
@@ -9,7 +10,11 @@ import qualified Data.HashMap.Strict as H
 import           OpenTelemetry.Attributes
 import qualified OpenTelemetry.Context as Context
 import           OpenTelemetry.Context.ThreadLocal
+#if MIN_VERSION_hs_opentelemetry_api(0,3,0)
+import           OpenTelemetry.Exporter.InMemory.Span
+#else
 import           OpenTelemetry.Exporter.InMemory
+#endif
 import           OpenTelemetry.Trace
 import           OpenTelemetry.Trace.Core
 import           OpenTelemetry.Trace.Sampler
@@ -29,7 +34,11 @@ mkSpanInfo s = do
   pure SpanInfo
     { name = spanName s
     , parentName = spanName <$> parentSpan
+#if MIN_VERSION_hs_opentelemetry_api(0,3,0)
+    , attrs = H.delete "thread.id" . getAttributeMap $ spanAttributes s
+#else
     , attrs = H.delete "thread.id" . snd . getAttributes $ spanAttributes s
+#endif
     }
 
 withGlobalTracing :: (OutChan ImmutableSpan -> IO a) -> IO a
@@ -159,9 +168,9 @@ nestedSpans spansChan = do
   t1
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "67" "t2" (Just "t1")
-    , spanInfo "67" "t2" (Just "t1")
-    , spanInfo "61" "t1" Nothing
+    [ spanInfo "76" "t2" (Just "t1")
+    , spanInfo "76" "t2" (Just "t1")
+    , spanInfo "70" "t1" Nothing
     ]
 
 excludedCon :: OutChan ImmutableSpan -> Assertion
@@ -169,7 +178,7 @@ excludedCon spansChan = do
   t4
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "67" "t2" Nothing
+    [ spanInfo "76" "t2" Nothing
     ]
 
 simpleConstraint :: OutChan ImmutableSpan -> Assertion
@@ -177,8 +186,8 @@ simpleConstraint spansChan = do
   t5
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "67" "t2" (Just "t5")
-    , spanInfo "81" "t5" Nothing
+    [ spanInfo "76" "t2" (Just "t5")
+    , spanInfo "90" "t5" Nothing
     ]
 
 excludeConstraint :: OutChan ImmutableSpan -> Assertion
@@ -186,7 +195,7 @@ excludeConstraint spansChan = do
   t6
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "67" "t2" Nothing ]
+    [ spanInfo "76" "t2" Nothing ]
 
 partialCon :: OutChan ImmutableSpan -> Assertion
 partialCon spansChan = do
@@ -194,9 +203,9 @@ partialCon spansChan = do
   t8
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "67" "t2" Nothing
-    , spanInfo "67" "t2" (Just "t8")
-    , spanInfo "95" "t8" Nothing
+    [ spanInfo "76" "t2" Nothing
+    , spanInfo "76" "t2" (Just "t8")
+    , spanInfo "104" "t8" Nothing
     ]
 
 wildCard :: OutChan ImmutableSpan -> Assertion
@@ -206,7 +215,7 @@ wildCard spansChan = do
   _ <- t11
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "101" "t9" Nothing ]
+    [ spanInfo "110" "t9" Nothing ]
 
 multiPred :: OutChan ImmutableSpan -> Assertion
 multiPred spansChan = do
@@ -214,7 +223,7 @@ multiPred spansChan = do
   t13
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "119" "t13" Nothing ]
+    [ spanInfo "128" "t13" Nothing ]
 
 multiPredX :: OutChan ImmutableSpan -> Assertion
 multiPredX spansChan = do
@@ -223,14 +232,14 @@ multiPredX spansChan = do
   t16
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "134" "t16" Nothing ]
+    [ spanInfo "143" "t16" Nothing ]
 
 pointFree :: OutChan ImmutableSpan -> Assertion
 pointFree spansChan = do
   t17 ()
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "137" "t17" Nothing ]
+    [ spanInfo "146" "t17" Nothing ]
 
 spanInfo :: Text -> Text -> Maybe Text -> SpanInfo
 spanInfo lineNo funName mParentName =
@@ -242,7 +251,11 @@ spanInfo lineNo funName mParentName =
       , ("code.filepath", AttributeValue (TextAttribute "test/Main.hs"))
       , ("code.function", AttributeValue (TextAttribute funName))
       , ("code.namespace", AttributeValue (TextAttribute "Main"))
+#if MIN_VERSION_hs_opentelemetry_api(0,3,0)
+      , ("code.package", AttributeValue (TextAttribute "hs-opentelemetry-instrumentation-auto-0.1.0.3-inplace-auto-instrument-test"))
+#else
       , ("code.package", AttributeValue (TextAttribute "hs-opentelemetry-instrumentation-auto-0.1.0.2-inplace-auto-instrument-test"))
+#endif
       ]
     }
 
