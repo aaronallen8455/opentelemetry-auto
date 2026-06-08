@@ -23,7 +23,6 @@ parsedResultAction opts modSummary
         {Ghc.hpm_module = Ghc.L modLoc mo@Ghc.HsModule{Ghc.hsmodDecls}}} = do
 
   let modName = Ghc.moduleName $ Ghc.ms_mod modSummary
-      unitId = Ghc.toUnitId . Ghc.moduleUnit $ Ghc.ms_mod modSummary
 
   hscEnv <- Ghc.getHscEnv
   result <- liftIO $
@@ -48,7 +47,7 @@ parsedResultAction opts modSummary
     Just config -> do
       let matches = S.fromList $ getMatches config hsmodDecls
 
-          newDecls = instrumentDecl modName unitId autoInstrumentName matches <$> hsmodDecls
+          newDecls = instrumentDecl modName autoInstrumentName matches <$> hsmodDecls
 
       pure parsedResult
         { Ghc.parsedResultModule = prm
@@ -119,32 +118,30 @@ getMatches cfg = concat . mapMaybe go where
 
 instrumentDecl
   :: Ghc.ModuleName
-  -> Ghc.UnitId
   -> Ghc.Name
   -> S.Set Ghc.OccName
   -> Ghc.LHsDecl Ghc.GhcPs
   -> Ghc.LHsDecl Ghc.GhcPs
-instrumentDecl modName unitId instrName targets
+instrumentDecl modName instrName targets
     (Ghc.L loc (Ghc.ValD vX fb@Ghc.FunBind
       { Ghc.fun_matches = mg@Ghc.MG
         { Ghc.mg_alts = Ghc.L altsLoc alts }, Ghc.fun_id}))
   | Ghc.rdrNameOcc (Ghc.unLoc fun_id) `S.member` targets
   = let newAlts = (fmap . fmap)
-          (instrumentMatch modName unitId (Ghc.unLoc fun_id) instrName)
+          (instrumentMatch modName (Ghc.unLoc fun_id) instrName)
           alts
      in Ghc.L loc (Ghc.ValD vX (fb
        { Ghc.fun_matches = mg
          { Ghc.mg_alts = Ghc.L altsLoc newAlts }}))
-instrumentDecl _ _ _ _ x = x
+instrumentDecl _ _ _ x = x
 
 instrumentMatch
   :: Ghc.ModuleName
-  -> Ghc.UnitId
   -> Ghc.RdrName
   -> Ghc.Name
   -> Ghc.Match Ghc.GhcPs (Ghc.GenLocated Ghc.SrcSpanAnnA (Ghc.HsExpr Ghc.GhcPs))
   -> Ghc.Match Ghc.GhcPs (Ghc.GenLocated Ghc.SrcSpanAnnA (Ghc.HsExpr Ghc.GhcPs))
-instrumentMatch modName unitId bindName instrName match =
+instrumentMatch modName bindName instrName match =
   match
     { Ghc.m_grhss = (Ghc.m_grhss match)
       { Ghc.grhssGRHSs = (fmap . fmap) modifyGRH (Ghc.grhssGRHSs (Ghc.m_grhss match)) }
@@ -172,7 +169,5 @@ instrumentMatch modName unitId bindName instrName match =
             mkStringExpr (Ghc.srcSpanFile srcSpan)
               `app`
             (mkStringExpr . Ghc.fsLit . show $ Ghc.srcSpanStartLine srcSpan)
-              `app`
-            mkStringExpr (Ghc.unitIdFS unitId)
 
        in Ghc.L loc $ Ghc.HsApp Ghc.noAnn' instr (Ghc.L loc x)

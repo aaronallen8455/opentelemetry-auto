@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        cabal: ["3.12.1.0"]
+        cabal: ["3.16.1.0"]
         ghc:
           - "9.12.2"
           - "9.10.1"
@@ -22,7 +22,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - uses: haskell/actions/setup@v2.0
+    - uses: haskell-actions/setup@v2.11.0
       id: setup-haskell-cabal
       name: Setup Haskell
       with:

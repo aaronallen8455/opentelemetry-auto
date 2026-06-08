@@ -1,5 +1,10 @@
 # Revision history for auto-instrument
 
+## 0.2.0.0 -- 2026-06-07
+
+* Support hs-opentelemetry-api 1.0.0
+* Drop support for older versions
+
 ## 0.1.0.3 -- 2025-11-18
 
 * Support GHC 9.12

@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE CPP #-}
 module Main (main) where
 
 import           Data.Kind (Constraint)
@@ -10,14 +9,11 @@ import qualified Data.HashMap.Strict as H
 import           OpenTelemetry.Attributes
 import qualified OpenTelemetry.Context as Context
 import           OpenTelemetry.Context.ThreadLocal
-#if MIN_VERSION_hs_opentelemetry_api(0,3,0)
 import           OpenTelemetry.Exporter.InMemory.Span
-#else
-import           OpenTelemetry.Exporter.InMemory
-#endif
 import           OpenTelemetry.Trace
 import           OpenTelemetry.Trace.Core
 import           OpenTelemetry.Trace.Sampler
+import qualified System.Environment as Env
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           UnliftIO hiding (getChanContents)
@@ -31,14 +27,12 @@ data SpanInfo = SpanInfo
 mkSpanInfo :: ImmutableSpan -> IO SpanInfo
 mkSpanInfo s = do
   parentSpan <- traverse unsafeReadSpan $ spanParent s
+  sHot <- readIORef $ spanHot s
+  parentSHot <- readIORef `traverse` (spanHot <$> parentSpan)
   pure SpanInfo
-    { name = spanName s
-    , parentName = spanName <$> parentSpan
-#if MIN_VERSION_hs_opentelemetry_api(0,3,0)
-    , attrs = H.delete "thread.id" . getAttributeMap $ spanAttributes s
-#else
-    , attrs = H.delete "thread.id" . snd . getAttributes $ spanAttributes s
-#endif
+    { name = hotName sHot
+    , parentName = hotName <$> parentSHot
+    , attrs = H.delete "thread.id" . getAttributeMap $ hotAttributes sHot
     }
 
 withGlobalTracing :: (OutChan ImmutableSpan -> IO a) -> IO a
@@ -46,7 +40,7 @@ withGlobalTracing act = do
   _ <- attachContext Context.empty
   bracket
     initializeTracing
-    (shutdownTracerProvider . fst)
+    ((`shutdownTracerProvider` Nothing) . fst)
     (\(_, ref) -> act ref)
 
 initializeTracing :: IO (TracerProvider, OutChan ImmutableSpan)
@@ -146,12 +140,13 @@ t17 :: a -> Instrumented a
 t17 = pure
 
 main :: IO ()
-main =
+main = do
+  Env.setEnv "OTEL_SEMCONV_STABILITY_OPT_IN" "code/dup"
   withGlobalTracing $ \spansChan -> do
     defaultMain (testTree spansChan)
 
 testTree :: OutChan ImmutableSpan -> TestTree
-testTree spansChan = testGroup "Tests"
+testTree spansChan = inOrderTestGroup "Tests"
   [ testCase "nested spans" (nestedSpans spansChan)
   , testCase "ignore excluded constructor" (excludedCon spansChan)
   , testCase "simple constraint rule" (simpleConstraint spansChan)
@@ -168,9 +163,9 @@ nestedSpans spansChan = do
   t1
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "76" "t2" (Just "t1")
-    , spanInfo "76" "t2" (Just "t1")
-    , spanInfo "70" "t1" Nothing
+    [ spanInfo "70" "t2" (Just "t1")
+    , spanInfo "70" "t2" (Just "t1")
+    , spanInfo "64" "t1" Nothing
     ]
 
 excludedCon :: OutChan ImmutableSpan -> Assertion
@@ -178,7 +173,7 @@ excludedCon spansChan = do
   t4
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "76" "t2" Nothing
+    [ spanInfo "70" "t2" Nothing
     ]
 
 simpleConstraint :: OutChan ImmutableSpan -> Assertion
@@ -186,8 +181,8 @@ simpleConstraint spansChan = do
   t5
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "76" "t2" (Just "t5")
-    , spanInfo "90" "t5" Nothing
+    [ spanInfo "70" "t2" (Just "t5")
+    , spanInfo "84" "t5" Nothing
     ]
 
 excludeConstraint :: OutChan ImmutableSpan -> Assertion
@@ -195,7 +190,7 @@ excludeConstraint spansChan = do
   t6
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "76" "t2" Nothing ]
+    [ spanInfo "70" "t2" Nothing ]
 
 partialCon :: OutChan ImmutableSpan -> Assertion
 partialCon spansChan = do
@@ -203,9 +198,9 @@ partialCon spansChan = do
   t8
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "76" "t2" Nothing
-    , spanInfo "76" "t2" (Just "t8")
-    , spanInfo "104" "t8" Nothing
+    [ spanInfo "70" "t2" Nothing
+    , spanInfo "70" "t2" (Just "t8")
+    , spanInfo "98" "t8" Nothing
     ]
 
 wildCard :: OutChan ImmutableSpan -> Assertion
@@ -215,7 +210,7 @@ wildCard spansChan = do
   _ <- t11
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "110" "t9" Nothing ]
+    [ spanInfo "104" "t9" Nothing ]
 
 multiPred :: OutChan ImmutableSpan -> Assertion
 multiPred spansChan = do
@@ -223,7 +218,7 @@ multiPred spansChan = do
   t13
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "128" "t13" Nothing ]
+    [ spanInfo "122" "t13" Nothing ]
 
 multiPredX :: OutChan ImmutableSpan -> Assertion
 multiPredX spansChan = do
@@ -232,14 +227,14 @@ multiPredX spansChan = do
   t16
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "143" "t16" Nothing ]
+    [ spanInfo "137" "t16" Nothing ]
 
 pointFree :: OutChan ImmutableSpan -> Assertion
 pointFree spansChan = do
   t17 ()
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "146" "t17" Nothing ]
+    [ spanInfo "140" "t17" Nothing ]
 
 spanInfo :: Text -> Text -> Maybe Text -> SpanInfo
 spanInfo lineNo funName mParentName =
@@ -247,15 +242,13 @@ spanInfo lineNo funName mParentName =
     { name = funName
     , parentName = mParentName
     , attrs =
-      [ ("code.lineno", AttributeValue (TextAttribute lineNo))
+      [ ("code.line.number", AttributeValue (TextAttribute lineNo))
+      , ("code.file.path", AttributeValue (TextAttribute "test/Main.hs"))
+      , ("code.function.name", AttributeValue (TextAttribute ("Main." <> funName)))
+      , ("code.lineno", AttributeValue (TextAttribute lineNo))
       , ("code.filepath", AttributeValue (TextAttribute "test/Main.hs"))
       , ("code.function", AttributeValue (TextAttribute funName))
       , ("code.namespace", AttributeValue (TextAttribute "Main"))
-#if MIN_VERSION_hs_opentelemetry_api(0,3,0)
-      , ("code.package", AttributeValue (TextAttribute "hs-opentelemetry-instrumentation-auto-0.1.0.3-inplace-auto-instrument-test"))
-#else
-      , ("code.package", AttributeValue (TextAttribute "hs-opentelemetry-instrumentation-auto-0.1.0.2-inplace-auto-instrument-test"))
-#endif
       ]
     }
 
