@@ -2,6 +2,7 @@ targets = [
   { type = "constructor", value = "Instrumented" },
   { type = "constructor", value = "Partial ()" },
   { type = "constructor", value = "WildCard (Maybe _)" },
+  { type = "constructor", value = "Q.IO" },
   { type = "constraints", value = ["InstrumentC"] },
   { type = "constraints", value = ["C1", "C2"] }
 ]

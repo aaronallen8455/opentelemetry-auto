@@ -62,7 +62,7 @@ data Target
   | Constraints ConstraintSet
 
 data TargetCon
-  = TyVar String
+  = TyVar String (Maybe String)
   | WC
   | App TargetCon TargetCon
   | Unit
@@ -79,9 +79,12 @@ targetParser = appP
     unitP = Unit <$ P.string "()" <* skipSpaces
     varP = do
       v <- P.many1 (P.satisfy $ \c -> c `notElem` [' ', '(', ')', ',']) <* skipSpaces
-      case v of
-        "_" -> pure WC
-        _ -> pure $ TyVar v
+      pure $ case v of
+        "_" -> WC
+        _ ->
+          case break (== '.') $ reverse v of
+            (_, "") -> TyVar v Nothing
+            (revV, revQuali) -> TyVar (reverse revV) (Just . reverse $ drop 1 revQuali)
     parenP = do
       inParens <-
         P.between (P.char '(' <* skipSpaces) (P.char ')')

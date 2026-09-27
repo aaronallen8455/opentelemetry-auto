@@ -95,12 +95,18 @@ getMatches cfg = concat . mapMaybe go where
     -> Bool
   checkTy top t (Ghc.HsParTy _ (Ghc.L _ x)) = checkTy top t x
   checkTy top t (Ghc.HsDocTy _ (Ghc.L _ x) _) = checkTy top t x
-  checkTy _ (Cfg.TyVar name) (Ghc.HsTyVar _ _ (Ghc.L _ rdrName)) =
+  checkTy _ (Cfg.TyVar name mQuali) (Ghc.HsTyVar _ _ (Ghc.L _ rdrName)) =
     BS8.pack name == Ghc.bytesFS (Ghc.occNameFS $ Ghc.rdrNameOcc rdrName)
+    &&
+      -- check that qualifier matches if present
+      maybe
+        True
+        (\q -> Just q == (Ghc.moduleNameString . fst <$> Ghc.isQual_maybe rdrName))
+        mQuali
   checkTy top target@(Cfg.App x y) (Ghc.HsAppTy _ (Ghc.L _ con) (Ghc.L _ arg)) =
     (checkTy False y arg && checkTy False x con )
     || (top && checkTy True target con)
-  checkTy True target@(Cfg.TyVar _) (Ghc.HsAppTy _ (Ghc.L _ con) _) =
+  checkTy True target@(Cfg.TyVar {}) (Ghc.HsAppTy _ (Ghc.L _ con) _) =
     checkTy True target con
   checkTy _ Cfg.Unit (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple []) = True
   checkTy _ (Cfg.Tuple targets) (Ghc.HsTupleTy _ Ghc.HsBoxedOrConstraintTuple exprs) =

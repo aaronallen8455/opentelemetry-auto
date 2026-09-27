@@ -58,6 +58,9 @@ AutoInstrument -fplugin-opt AutoInstrument:my-config.toml`.
     all be present in the constraint context of a function in order for it to
     be instrumented. The `value` field should be an array of constraint types
     which do not need to be fully applied and can have underscore wildcards.
+- Qualifiers can be used to specify that a target for a constructor or
+  constraint must have that qualifier in order to match. If the target does not
+  specify a qualifier then any use of that target will match regardless of qualifier.
 - The `exclusions` key is an array with the same structure as `targets`. If any
   of these rules match a type signature, the corresponding declaration(s) will
   not be instrumented.

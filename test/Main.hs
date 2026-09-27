@@ -6,6 +6,7 @@ module Main (main) where
 import           Data.Kind (Constraint)
 import           Data.Text (Text)
 import qualified Data.HashMap.Strict as H
+import qualified System.IO as Q
 import           OpenTelemetry.Attributes
 import qualified OpenTelemetry.Context as Context
 import           OpenTelemetry.Context.ThreadLocal
@@ -139,6 +140,9 @@ t16 = pure ()
 t17 :: a -> Instrumented a
 t17 = pure
 
+t18 :: Q.IO ()
+t18 = pure ()
+
 main :: IO ()
 main = do
   Env.setEnv "OTEL_SEMCONV_STABILITY_OPT_IN" "code/dup"
@@ -148,6 +152,7 @@ main = do
 testTree :: OutChan ImmutableSpan -> TestTree
 testTree spansChan = inOrderTestGroup "Tests"
   [ testCase "nested spans" (nestedSpans spansChan)
+  , testCase "qualified constructor" (qualifiedCon spansChan)
   , testCase "ignore excluded constructor" (excludedCon spansChan)
   , testCase "simple constraint rule" (simpleConstraint spansChan)
   , testCase "ignore excluded constraint" (excludeConstraint spansChan)
@@ -163,17 +168,24 @@ nestedSpans spansChan = do
   t1
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "70" "t2" (Just "t1")
-    , spanInfo "70" "t2" (Just "t1")
-    , spanInfo "64" "t1" Nothing
+    [ spanInfo "71" "t2" (Just "t1")
+    , spanInfo "71" "t2" (Just "t1")
+    , spanInfo "65" "t1" Nothing
     ]
+
+qualifiedCon :: OutChan ImmutableSpan -> Assertion
+qualifiedCon spansChan = do
+  t18
+  spans <- getSpans spansChan
+  spans @?=
+    [ spanInfo "144" "t18" Nothing ]
 
 excludedCon :: OutChan ImmutableSpan -> Assertion
 excludedCon spansChan = do
   t4
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "70" "t2" Nothing
+    [ spanInfo "71" "t2" Nothing
     ]
 
 simpleConstraint :: OutChan ImmutableSpan -> Assertion
@@ -181,8 +193,8 @@ simpleConstraint spansChan = do
   t5
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "70" "t2" (Just "t5")
-    , spanInfo "84" "t5" Nothing
+    [ spanInfo "71" "t2" (Just "t5")
+    , spanInfo "85" "t5" Nothing
     ]
 
 excludeConstraint :: OutChan ImmutableSpan -> Assertion
@@ -190,7 +202,7 @@ excludeConstraint spansChan = do
   t6
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "70" "t2" Nothing ]
+    [ spanInfo "71" "t2" Nothing ]
 
 partialCon :: OutChan ImmutableSpan -> Assertion
 partialCon spansChan = do
@@ -198,9 +210,9 @@ partialCon spansChan = do
   t8
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "70" "t2" Nothing
-    , spanInfo "70" "t2" (Just "t8")
-    , spanInfo "98" "t8" Nothing
+    [ spanInfo "71" "t2" Nothing
+    , spanInfo "71" "t2" (Just "t8")
+    , spanInfo "99" "t8" Nothing
     ]
 
 wildCard :: OutChan ImmutableSpan -> Assertion
@@ -210,7 +222,7 @@ wildCard spansChan = do
   _ <- t11
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "104" "t9" Nothing ]
+    [ spanInfo "105" "t9" Nothing ]
 
 multiPred :: OutChan ImmutableSpan -> Assertion
 multiPred spansChan = do
@@ -218,7 +230,7 @@ multiPred spansChan = do
   t13
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "122" "t13" Nothing ]
+    [ spanInfo "123" "t13" Nothing ]
 
 multiPredX :: OutChan ImmutableSpan -> Assertion
 multiPredX spansChan = do
@@ -227,14 +239,14 @@ multiPredX spansChan = do
   t16
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "137" "t16" Nothing ]
+    [ spanInfo "138" "t16" Nothing ]
 
 pointFree :: OutChan ImmutableSpan -> Assertion
 pointFree spansChan = do
   t17 ()
   spans <- getSpans spansChan
   spans @?=
-    [ spanInfo "140" "t17" Nothing ]
+    [ spanInfo "141" "t17" Nothing ]
 
 spanInfo :: Text -> Text -> Maybe Text -> SpanInfo
 spanInfo lineNo funName mParentName =
